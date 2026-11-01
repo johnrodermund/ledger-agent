@@ -1,0 +1,51 @@
+x-app: &app
+  build: .
+  env_file:
+    - path: .env
+      required: false
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16.4
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # seed, agent and evals are placeholders; later tasks give them commands.
+  seed:
+    <<: *app
+    volumes:
+      - keys:/keys
+      - ./src:/app/src
+
+  agent:
+    <<: *app
+    volumes:
+      - ./src:/app/src
+
+  evals:
+    <<: *app
+    volumes:
+      - keys:/keys
+      - ./src:/app/src
+      - ./evals:/app/evals
+
+  tests:
+    <<: *app
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./evals:/app/evals
+
+volumes:
+  keys:
