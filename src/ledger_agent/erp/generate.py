@@ -55,7 +55,7 @@ def money(cents: int) -> Decimal:
     return Decimal(cents).scaleb(-2)
 
 
-def _ymd(year: int, month: int, day: int) -> int:
+def ymd(year: int, month: int, day: int) -> int:
     return year * 10000 + month * 100 + day
 
 
@@ -67,17 +67,20 @@ def _periods() -> list[dict]:
         close = None
         if closed:
             # Close happens CLOSE_LAG_DAYS after month end, always in the next month.
-            close = _ymd(YEAR if m < 12 else YEAR + 1, m % 12 + 1, CLOSE_LAG_DAYS)
-        rows.append({"PRD_ID": m, "STRT_DT": _ymd(YEAR, m, 1),
-                     "END_DT": _ymd(YEAR, m, last), "CLOSE_DT": close,
+            close = ymd(YEAR if m < 12 else YEAR + 1, m % 12 + 1, CLOSE_LAG_DAYS)
+        rows.append({"PRD_ID": m, "STRT_DT": ymd(YEAR, m, 1),
+                     "END_DT": ymd(YEAR, m, last), "CLOSE_DT": close,
                      "STAT_CD": "C" if closed else "O"})
     return rows
 
 
 def generate_clean(seed: int) -> Dataset:
-    rng = random.Random(seed)
+    return generate_from(random.Random(seed))
 
-    coa = [{"ACCT_CD": code(a), "ACCT_NM": n, "ACCT_TYP": t, "ACTV_FLG": f}
+
+def generate_from(rng: random.Random) -> Dataset:
+    """Generate from a caller's Random, so later planting can continue its stream."""
+    coa =[{"ACCT_CD": code(a), "ACCT_NM": n, "ACCT_TYP": t, "ACTV_FLG": f}
            for a, n, t, f in COA]
 
     names = [f"{w} {rng.choice(VENDOR_KINDS)}" for w in VENDOR_WORDS[:N_VENDORS]]
@@ -91,7 +94,7 @@ def generate_clean(seed: int) -> Dataset:
         nonlocal next_jrnl
         jn = next_jrnl
         next_jrnl += 1
-        headers.append({"JRNL_NO": jn, "PRD_ID": prd, "POST_DT": _ymd(YEAR, prd, day),
+        headers.append({"JRNL_NO": jn, "PRD_ID": prd, "POST_DT": ymd(YEAR, prd, day),
                         "POST_FLG": "P", "REF_JRNL_NO": None, "SRC_CD": src,
                         "SRC_REF": ref, "MEMO": memo})
         for seq, (acct, dr, cr) in enumerate(legs, start=1):
@@ -116,14 +119,14 @@ def generate_clean(seed: int) -> Dataset:
         inv_no = f"{vend['VEND_CD'].strip()}-{rng.randint(10000, 99999)}-{inv_id}"
         legs = [(a, c, 0) for a, c in split(total)] + [(AP_CONTROL, 0, total)]
         jn = add_journal(prd, day, "AP", inv_no, f"Invoice {inv_no}", legs)
-        inv_dt = _ymd(YEAR, prd, day)
+        inv_dt = ymd(YEAR, prd, day)
 
         pay_dt = None
         if rng.random() < 0.7:
             pay_prd = prd + rng.randint(0, 2)
             if pay_prd <= N_PERIODS:
                 pay_day = rng.randint(day + 1, 28)
-                pay_dt = _ymd(YEAR, pay_prd, pay_day)
+                pay_dt = ymd(YEAR, pay_prd, pay_day)
                 pjn = add_journal(pay_prd, pay_day, "AP", f"PAY-{pay_id}",
                                   f"Payment {inv_no}",
                                   [(AP_CONTROL, total, 0), (CASH, 0, total)])
