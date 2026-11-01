@@ -19,6 +19,8 @@ NON_DETERMINISTIC = {
     "localtime", "localtimestamp", "clock_timestamp", "timeofday",
     "statement_timestamp", "transaction_timestamp", "gen_random_uuid",
 }
+TIME_LITERALS = {"now", "today", "tomorrow", "yesterday"}
+NON_DET_MESSAGE = "non-deterministic functions are not allowed (results must be repeatable)"
 FORBIDDEN_FUNCTIONS = {
     "pg_read_file", "pg_ls_dir", "lo_import", "lo_export", "set_config", "dblink",
 }
@@ -50,7 +52,7 @@ def _fail(message: str) -> QueryResult:
 def _function_names(node: exp.Expression) -> set[str]:
     names = set()
     if isinstance(node, exp.Anonymous):
-        names.add(str(node.this).lower())
+        names.add(node.name.lower())
     if isinstance(node, exp.Func):
         names.add(node.sql_name().lower())
     names.add(type(node).__name__.lower())
@@ -77,9 +79,13 @@ def validate(sql: str) -> str | None:
             return "only SELECT statements are allowed"
         if isinstance(node, exp.Lock):
             return "locking clauses such as FOR UPDATE are not allowed"
+        if (isinstance(node, exp.Cast) and isinstance(node.this, exp.Literal)
+                and node.this.is_string
+                and node.this.name.strip().lower() in TIME_LITERALS):
+            return NON_DET_MESSAGE
         names = _function_names(node)
         if names & NON_DETERMINISTIC:
-            return "non-deterministic functions are not allowed (results must be repeatable)"
+            return NON_DET_MESSAGE
         if names & FORBIDDEN_FUNCTIONS:
             return "file and session functions are not allowed"
     return None
@@ -97,6 +103,7 @@ def run_query(dbname: str, sql: str, max_rows: int = 200, timeout_ms: int = 5000
         with connect_ro(dbname) as conn:
             with conn.transaction():
                 conn.execute("SET TRANSACTION READ ONLY")
+                conn.execute("SET LOCAL TimeZone = 'UTC'")
                 conn.execute(f"SET LOCAL statement_timeout = {int(timeout_ms)}")
                 conn.execute("SET LOCAL max_parallel_workers_per_gather = 0")
                 cur = conn.execute(sql)
