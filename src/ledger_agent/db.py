@@ -21,11 +21,10 @@ def _connect(dbname: str, user: str, password: str) -> psycopg.Connection:
 
 
 def connect_admin(dbname: str) -> psycopg.Connection:
-    return _connect(
-        dbname,
-        os.environ.get("POSTGRES_USER", "postgres"),
-        os.environ["POSTGRES_PASSWORD"],
-    )
+    password = os.environ.get("POSTGRES_PASSWORD")
+    if not password:
+        raise RuntimeError("POSTGRES_PASSWORD is not set; admin access is unavailable here")
+    return _connect(dbname, os.environ.get("POSTGRES_USER", "postgres"), password)
 
 
 def connect_ro(dbname: str) -> psycopg.Connection:
