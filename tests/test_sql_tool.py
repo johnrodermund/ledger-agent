@@ -70,6 +70,63 @@ def test_rejects_nondeterministic_functions(db, sql):
     assert "non-deterministic" in run_query(db, sql).error
 
 
+@pytest.mark.parametrize("sql", [
+    'SELECT * FROM "GLJRNL" TABLESAMPLE BERNOULLI (10)',
+    'SELECT * FROM "GLJRNL" TABLESAMPLE SYSTEM (10)',
+    "SELECT * FROM pg_stat_user_tables",
+    "SELECT * FROM pg_stat_activity",
+    "SELECT * FROM pg_catalog.pg_statio_user_tables",
+    "SELECT * FROM pg_stats",
+    "SELECT * FROM pg_locks",
+    "SELECT reltuples FROM pg_class",
+    "SELECT * FROM pg_catalog.pg_database",
+    "SELECT * FROM \"pg_class\"",
+    'SELECT xmin FROM "GLJRNL"',
+    'SELECT xmax FROM "GLJRNL"',
+    'SELECT cmin FROM "GLJRNL"',
+    'SELECT cmax FROM "GLJRNL"',
+    'SELECT ctid FROM "GLJRNL"',
+    'SELECT l.ctid FROM "GLJRNL" l',
+    'SELECT "xmin" FROM "GLJRNL"',
+    'SELECT oid FROM pg_type',
+    'SELECT tableoid FROM "GLJRNL"',
+    'SELECT 1 FROM "GLJRNL" ORDER BY ctid',
+    "SELECT txid_current()",
+    "SELECT pg_current_xact_id()",
+    "SELECT pg_backend_pid()",
+    "SELECT pg_postmaster_start_time()",
+    "SELECT inet_server_addr()",
+    "SELECT inet_server_port()",
+    "SELECT pg_relation_size('\"GLJRNL\"')",
+    "SELECT pg_total_relation_size('\"GLJRNL\"')",
+    "SELECT pg_database_size('x')",
+    "SELECT pg_table_size('\"GLJRNL\"')",
+    "SELECT version()",
+    "SELECT VERSION()",
+    'SELECT "version"()',
+    "SELECT pg_catalog.version()",
+])
+def test_rejects_anything_that_varies_between_runs(db, sql):
+    assert "repeatable" in run_query(db, sql).error
+
+
+@pytest.mark.parametrize("sql", [
+    'SELECT "JRNL_NO" FROM "GLJRNL" TABLESAMPLE BERNOULLI (10) REPEATABLE (7)',
+    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",
+    "SELECT column_name, data_type FROM information_schema.columns",
+    "SELECT pg_sleep(0)",
+    "SELECT 1 AS version",
+])
+def test_repeatable_queries_stay_usable(db, sql):
+    assert run_query(db, sql).ok
+
+
+def test_a_column_named_version_is_not_a_function_call():
+    from ledger_agent.tools.sql import validate
+
+    assert validate('SELECT version FROM "SOME_TABLE"') is None
+
+
 def test_syntax_error_is_returned_not_raised(db):
     assert run_query(db, "SELEC 1").ok is False
 

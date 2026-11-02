@@ -11,6 +11,10 @@ def _service(name):
     return yaml.safe_load(Path("docker-compose.yml").read_text())["services"][name]
 
 
+def test_postgres_runs_without_autovacuum():
+    assert "autovacuum=off" in _service("db")["command"]
+
+
 def test_agent_service_gets_no_admin_password():
     agent = _service("agent")
     assert "env_file" not in agent

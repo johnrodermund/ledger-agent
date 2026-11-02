@@ -1,7 +1,8 @@
 """The only SQL path the LLM gets: one validated SELECT, run read-only.
 
-Output must be deterministic (replay recordings hash it), so queries that
-read the clock or random state are rejected, and error text never carries
+Output must be deterministic (replay recordings hash it), so queries that read the
+clock, random state, planner statistics, row versions or server identity are rejected,
+rows without a top-level ORDER BY are sorted here, and error text never carries
 connection-specific detail.
 """
 
@@ -21,6 +22,17 @@ NON_DETERMINISTIC = {
 }
 TIME_LITERALS = {"now", "today", "tomorrow", "yesterday"}
 NON_DET_MESSAGE = "non-deterministic functions are not allowed (results must be repeatable)"
+NOT_REPEATABLE_MESSAGE = (
+    "statistics, row versions and server state are not allowed (results must be repeatable)")
+SAMPLE_MESSAGE = "TABLESAMPLE needs REPEATABLE (results must be repeatable)"
+NOT_REPEATABLE_FUNCTIONS = {
+    "txid_current", "pg_current_xact_id", "pg_backend_pid", "pg_postmaster_start_time",
+    "inet_server_addr", "inet_server_port", "pg_relation_size", "pg_total_relation_size",
+    "pg_database_size", "pg_table_size", "version",
+}
+NOT_REPEATABLE_RELATIONS = {"pg_locks", "pg_class", "pg_database"}
+NOT_REPEATABLE_RELATION_PREFIX = "pg_stat"  # also covers pg_statio_*, pg_stats, pg_statistic
+SYSTEM_COLUMNS = {"xmin", "xmax", "cmin", "cmax", "ctid", "oid", "tableoid"}
 FORBIDDEN_FUNCTIONS = {
     "pg_read_file", "pg_ls_dir", "lo_import", "lo_export", "set_config", "dblink",
 }
@@ -62,6 +74,22 @@ def _function_names(node: exp.Expression) -> set[str]:
     return {NODE_ALIASES.get(n, n) for n in names}
 
 
+def _not_repeatable(node: exp.Expression) -> str | None:
+    """Why node gives different results on an identical database, or None."""
+    if isinstance(node, exp.TableSample) and node.args.get("seed") is None:
+        return SAMPLE_MESSAGE
+    if isinstance(node, exp.Table):
+        name = node.name.lower()
+        if name in NOT_REPEATABLE_RELATIONS or name.startswith(NOT_REPEATABLE_RELATION_PREFIX):
+            return NOT_REPEATABLE_MESSAGE
+    if isinstance(node, exp.Column) and node.name.lower() in SYSTEM_COLUMNS:
+        return NOT_REPEATABLE_MESSAGE
+    # Only a call counts: a plain column may be called version.
+    if isinstance(node, exp.Func) and _function_names(node) & NOT_REPEATABLE_FUNCTIONS:
+        return NOT_REPEATABLE_MESSAGE
+    return None
+
+
 def validate(sql: str) -> str | None:
     """Return an error message, or None if sql is one safe, deterministic SELECT."""
     try:
@@ -88,7 +116,15 @@ def validate(sql: str) -> str | None:
             return NON_DET_MESSAGE
         if names & FORBIDDEN_FUNCTIONS:
             return "file and session functions are not allowed"
+        reason = _not_repeatable(node)
+        if reason:
+            return reason
     return None
+
+
+def _is_ordered(sql: str) -> bool:
+    """Whether a validated statement has an ORDER BY at the top level."""
+    return sqlglot.parse_one(sql, read="postgres").args.get("order") is not None
 
 
 def _render(value) -> str:
@@ -109,16 +145,15 @@ def run_query(dbname: str, sql: str, max_rows: int = 200, timeout_ms: int = 5000
                 conn.execute("SET LOCAL max_parallel_workers_per_gather = 0")
                 cur = conn.execute(sql)
                 columns = [d.name for d in cur.description]
-                fetched = cur.fetchmany(max_rows + 1)
+                fetched = cur.fetchall()
     except psycopg.errors.QueryCanceled:
         return _fail(f"query exceeded the {timeout_ms} ms time limit")
     except psycopg.Error as e:
         raise_if_unavailable(e, conn)
         # Primary message only: no connection details, positions or hints.
         return _fail(f"database error: {e.diag.message_primary or type(e).__name__}")
-    return QueryResult(
-        ok=True,
-        columns=columns,
-        rows=[[_render(v) for v in row] for row in fetched[:max_rows]],
-        truncated=len(fetched) > max_rows,
-    )
+    rows = [[_render(v) for v in row] for row in fetched]
+    if not _is_ordered(sql):
+        rows.sort()  # before the cap, so the same rows survive whatever plan was chosen
+    return QueryResult(ok=True, columns=columns, rows=rows[:max_rows],
+                       truncated=len(rows) > max_rows)

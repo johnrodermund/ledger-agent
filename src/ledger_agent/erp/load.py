@@ -36,7 +36,7 @@ def _insert(conn, table: str, rows: list[dict]) -> None:
 
 
 def load(dbname: str, dataset: Dataset) -> None:
-    """Drop and recreate dbname, then create the schema and load the data."""
+    """Drop and recreate dbname, create the schema, load the data and analyze it."""
     ident = sql.Identifier(dbname)
     with connect_admin("postgres") as admin:
         admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(ident))
@@ -47,3 +47,4 @@ def load(dbname: str, dataset: Dataset) -> None:
             _insert(conn, table, dataset.tables.get(table, []))
         _insert(conn, "SYSDICT", parse_dictionary((HERE / "dictionary.md").read_text(encoding="utf-8")))
         grant_roles(conn)
+        conn.execute("ANALYZE")  # fixes the plans, and with them unordered row order

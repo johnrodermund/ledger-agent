@@ -38,6 +38,8 @@ x-done: &done
 services:
   db:
     image: postgres:16.4
+    # Background analyze would change plans, and so row order, between runs.
+    command: ["postgres", "-c", "autovacuum=off"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin_test_pw}
