@@ -1,21 +1,40 @@
+# Every value below has a test default, so `docker compose up` works without a .env.
+# Copy .env.example to .env to change them.
+
+# Settings every service shares. None of them is the admin password.
+x-ledger-env: &ledger-env
+  LEDGER_DB_HOST: ${LEDGER_DB_HOST:-db}
+  LEDGER_DB_PORT: ${LEDGER_DB_PORT:-5432}
+  LEDGER_RO_PASSWORD: ${LEDGER_RO_PASSWORD:-ro_test_pw}
+  LEDGER_RW_PASSWORD: ${LEDGER_RW_PASSWORD:-rw_test_pw}
+  LEDGER_LLM_MODE: ${LEDGER_LLM_MODE:-replay}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+# Adds the admin password, for the services that create and drop databases.
+x-admin-env: &admin-env
+  <<: *ledger-env
+  POSTGRES_USER: ${POSTGRES_USER:-postgres}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin_test_pw}
+
 x-app: &app
   build: .
-  depends_on:
-    db:
-      condition: service_healthy
 
-# Full env (including the admin password) for services that need admin access.
-x-admin-env: &admin-env
-  env_file:
-    - path: .env
-      required: false
+# `up --abort-on-container-exit` stops the whole stack when any container exits, even with
+# code 0. So a one-shot service that succeeds idles instead of exiting and reports healthy
+# through the marker file; one that fails exits non-zero, which still aborts the run.
+x-done: &done
+  healthcheck:
+    test: ["CMD-SHELL", "test -f /tmp/done"]
+    interval: 1s
+    timeout: 2s
+    retries: 600
 
 services:
   db:
     image: postgres:16.4
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD, see .env.example}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin_test_pw}
     volumes:
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
@@ -24,38 +43,68 @@ services:
       timeout: 3s
       retries: 30
 
-  # seed, agent and evals are placeholders; later tasks give them commands.
+  # Loads scenario dev-1 and writes its answer key to the keys volume. Idles once done.
   seed:
-    <<: [*app, *admin-env]
+    <<: [*app, *done]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *admin-env
+    command: ["sh", "-c", "python -m ledger_agent.cli seed --scenario dev-1 --db ledger_dev_1 --key-out /keys/dev-1.json && touch /tmp/done && exec sleep infinity"]
     volumes:
       - keys:/keys
       - ./src:/app/src
+      - ./evals:/app/evals:ro
 
-  # No admin password: only the DB host and the ro/rw role passwords.
+  # No admin password and no keys volume: the agent never sees the answer key.
   agent:
-    <<: *app
-    environment:
-      LEDGER_DB_HOST: ${LEDGER_DB_HOST:-db}
-      LEDGER_DB_PORT: ${LEDGER_DB_PORT:-5432}
-      LEDGER_RO_PASSWORD: ${LEDGER_RO_PASSWORD:?set LEDGER_RO_PASSWORD, see .env.example}
-      LEDGER_RW_PASSWORD: ${LEDGER_RW_PASSWORD:?set LEDGER_RW_PASSWORD, see .env.example}
+    <<: [*app, *done]
+    depends_on:
+      db:
+        condition: service_healthy
+      seed:
+        condition: service_healthy
+    environment: *ledger-env
+    command: ["sh", "-c", "python -m ledger_agent.cli audit --db ledger_dev_1 --out /out && touch /tmp/done && exec sleep infinity"]
     volumes:
       - ./src:/app/src
+      - ./out:/out
+      - ./recordings:/app/recordings
 
+  # Builds its own answer keys in memory, so it mounts no keys volume.
   evals:
-    <<: [*app, *admin-env]
+    <<: *app
+    depends_on:
+      db:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    environment: *admin-env
+    command: ["sh", "-c",
+              "python -m ledger_evals.guardrails && python -m ledger_evals.run --split all --out /out/evals"]
     volumes:
-      - keys:/keys
       - ./src:/app/src
       - ./evals:/app/evals
+      - ./out:/out
+      - ./recordings:/app/recordings
 
+  # Only started by `docker compose run tests`, never by `up`: it exits at once and would
+  # abort the stack.
   tests:
-    <<: [*app, *admin-env]
+    <<: *app
+    profiles: [tests]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *admin-env
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
       - ./evals:/app/evals
       - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - ./README.md:/app/README.md:ro
+      - ./.env.example:/app/.env.example:ro
+      - ./.github:/app/.github:ro
 
 volumes:
   keys:

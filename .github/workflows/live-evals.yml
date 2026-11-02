@@ -1,0 +1,53 @@
+name: Live evals
+
+# Runs the evals against the real model. This costs money, so it is bounded by the
+# job timeout and by the per-run token limit (see the README). It never commits anything.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "live: run against the model. record: also write recordings and upload them as an artifact."
+        type: choice
+        options:
+          - live
+          - record
+        default: live
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LEDGER_LLM_MODE: ${{ inputs.mode || 'live' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env from the test values
+        run: cp .env.example .env
+      - name: Run the evals
+        run: docker compose up --build --abort-on-container-exit --exit-code-from evals
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: out/
+          if-no-files-found: ignore
+      - name: Upload recordings
+        if: always() && env.LEDGER_LLM_MODE == 'record'
+        uses: actions/upload-artifact@v4
+        with:
+          name: recordings
+          path: recordings/
+          if-no-files-found: error
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes
