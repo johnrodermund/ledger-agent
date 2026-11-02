@@ -1,0 +1,40 @@
+{
+  "key": "d0ec84003b18b3adf30c9f2066bc04274e03bec9685d1eda13d52bca48839588",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-6",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4169,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 463,
+    "stop_reason": "tool_use",
+    "text": "Journal 1894 debits 5500 for 9151.30 but credits AP Control (2000) for only 9124.30. The invoice 532 amount is 9124.30, so the AP credit is correct and the expense debit is overstated by 27.00.\n\nThe correction is a one-sided credit of 27.00 to 5500 in open period 11. The original lines plus this line net 5500 to 9124.30 and balance the group at 9124.30 on each side. No invoice status changes, because this is not a duplicate-invoice finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1894,
+          "lines": [
+            {
+              "acct_cd": "5500",
+              "cr_amt": "27.00",
+              "dr_amt": 0,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Journal 1894 debits Travel 5500 for 9151.30 but credits AP Control 2000 for 9124.30, which matches invoice 532 (9124.30). The expense debit is overstated by 27.00. A one-sided credit of 27.00 to 5500 in open period 11 brings the expense to 9124.30 and balances the journal group. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_01Vox6GZPUtRVxNLfrxvWT7k",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

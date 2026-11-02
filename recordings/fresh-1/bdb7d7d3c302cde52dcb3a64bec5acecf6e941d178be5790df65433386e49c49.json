@@ -1,0 +1,38 @@
+{
+  "key": "bdb7d7d3c302cde52dcb3a64bec5acecf6e941d178be5790df65433386e49c49",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "fresh-1",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1072,
+    "cache_write_tokens": 2126,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 621,
+    "stop_reason": "tool_use",
+    "text": "No constraint info is available. Next, the dictionary and the code values.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"SYSDICT\" ORDER BY 1,2"
+        },
+        "id": "toolu_01V5wSr7Y19X4UQivPZN5tL4",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH' t, \"STAT_CD\" v, count(*) c, min(\"INV_DT\") mn, max(\"INV_DT\") mx, sum(\"INV_AMT\") s FROM \"APINVH\" GROUP BY 2 UNION ALL SELECT 'GLJRNH_POST', \"POST_FLG\", count(*), min(\"POST_DT\"), max(\"POST_DT\"), 0 FROM \"GLJRNH\" GROUP BY 2 UNION ALL SELECT 'GLJRNH_SRC', \"SRC_CD\", count(*), min(\"POST_DT\"), max(\"POST_DT\"), 0 FROM \"GLJRNH\" GROUP BY 2 UNION ALL SELECT 'GLPERD', \"STAT_CD\", count(*), min(\"STRT_DT\"), max(\"END_DT\"), 0 FROM \"GLPERD\" GROUP BY 2 UNION ALL SELECT 'GLCOA', \"ACCT_TYP\", count(*), 0, 0, 0 FROM \"GLCOA\" GROUP BY 2 UNION ALL SELECT 'APVEND', \"ACTV_FLG\", count(*), 0, 0, 0 FROM \"APVEND\" GROUP BY 2 UNION ALL SELECT 'GLCOA_A', \"ACTV_FLG\", count(*), 0, 0, 0 FROM \"GLCOA\" GROUP BY 2"
+        },
+        "id": "toolu_01MTUiYQWTJopgBKPStCqVQp",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

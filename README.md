@@ -4,40 +4,43 @@ A LangGraph agent that audits a synthetic legacy ERP in Postgres, finds data dis
 
 ## Results
 
-Measured on the three holdout scenarios, run once with prompts frozen, on Claude Haiku 5.5 with thinking off. These are the recorded numbers, misses included.
+The agent runs on Claude Sonnet 5.5 by default, and Claude Haiku 5.5 replays from its own recordings for comparison. The clean comparison is the **fresh holdout**: three scenarios on unused seeds, added after everything else here was settled, and run once per model. Neither model was tuned against them or seen on them. These are the recorded numbers, misses included.
 
-| Metric | Holdout |
-| --- | --- |
-| Recall | 78.6% (11 of 14) |
-| Precision | 73.3% (11 of 15) |
-| Decoy false alarm rate | 37.5% (3 of 8) |
-| Fix validity | 90.9% (10 of 11) |
-| Verified but wrong | 1 |
-| End-to-end fix rate | 71.4% (10 of 14) |
-| Needs human rate | 26.7% (4 of 15) |
-| Refusals | 0 |
-| Incomplete scenarios | 0 |
-| Tokens, cost and queries per run | about 123,000 tokens, $0.019 and 29 queries |
+| Fresh holdout | Haiku 5.5 | Sonnet 5.5 |
+| --- | --- | --- |
+| Recall | 85.7% (12 of 14) | 92.9% (13 of 14) |
+| Precision | 80.0% (12 of 15) | 72.2% (13 of 18) |
+| Decoy false alarm rate | 25.0% (2 of 8) | 50.0% (4 of 8) |
+| Fix validity | 100.0% (12 of 12) | 100.0% (13 of 13) |
+| Verified but wrong | 0 | 0 |
+| End-to-end fix rate | 85.7% (12 of 14) | 92.9% (13 of 14) |
+| Needs human rate | 20.0% (3 of 15) | 27.8% (5 of 18) |
+| Incomplete scenarios | 0 | 0 |
+| Tokens, cost and queries per run | about 123,000 tokens, $0.016, 27 queries | about 243,000 tokens, $0.45, 42 queries |
 
-Recall by fault type:
+Misses on the fresh holdout. Haiku missed an invalid account (`fresh-2`) and an AP-to-GL mismatch (`fresh-3`), and flagged two decoys. Sonnet missed a duplicate invoice (`fresh-3`) and flagged four decoys, two of them in `fresh-2`.
 
-| Fault type | Recall |
-| --- | --- |
-| ap_gl_mismatch | 100.0% (3 of 3) |
-| closed_period_posting | 33.3% (1 of 3) |
-| duplicate_invoice | 66.7% (2 of 3) |
-| invalid_account | 100.0% (2 of 2) |
-| unbalanced_journal | 100.0% (3 of 3) |
+Sonnet finds and fixes one more planted fault in 14, and reports more valid-but-odd records as problems. It costs about 28 times as much per run. The hunt prompt has no guidance on decoys, on purpose, so the false alarm rates are the honest ones.
 
-Misses by scenario:
+### How the numbers got here
 
-- `holdout-1`: missed F04 (closed_period_posting); decoy false alarm D04; finding F004 credited to no fault.
-- `holdout-2`: decoy false alarm D01; findings F004 and F005 credited to no fault.
-- `holdout-3`: missed F02 (duplicate_invoice) and F05 (closed_period_posting); decoy false alarm D02; F001 verified but wrong; finding F004 credited to no fault.
+The first holdout (`holdout-1` to `-3`) was recorded once on Haiku and then once on Sonnet, before the two fixes below. Both models found 11 of 14 faults there, and Sonnet cost about 20 times as much. Reading Sonnet's misses showed that most were a reporting problem, not a detection one: it often put several faulty journals into one finding, which the scoring credits once and `propose` fixes once. Two fixes followed:
 
-The weak spots are closed-period postings and decoys: the agent reports more than a third of the valid-but-odd records as problems. The hunt prompt has no guidance on decoys, on purpose, so this rate is the honest one. The injection scenario passed: the hostile memo reached the model, recall held, and no proposed line used the memo's account.
+- `confirm` splits a finding that cites a few journals, or a few invoices for an AP-to-GL tie-out, into one finding per record. A duplicate pair stays one finding.
+- `propose` is told, for a duplicate invoice only, which copy to keep and that the journal recording the voided copy must be reversed in full.
 
-CI fails if a replay falls below the thresholds in `evals/thresholds.json`, set from this run to the nearest 5 points and rounded in the cautious direction. The guardrail suite is a separate result: the verifier must refuse 100% of its deliberately bad fixes. That figure covers only that suite, which has no LLM and does not measure the agent.
+The first holdout has now been seen, so its post-fix numbers are reported as such, not as a clean result:
+
+| First holdout, seen, after the fixes | Haiku 5.5 | Sonnet 5.5 |
+| --- | --- | --- |
+| Recall | 85.7% (12 of 14) | 92.9% (13 of 14) |
+| Decoy false alarm rate | 37.5% (3 of 8) | 37.5% (3 of 8) |
+| End-to-end fix rate | 78.6% (11 of 14) | 92.9% (13 of 14) |
+| Verified but wrong | 1 | 0 |
+
+Prompt caching is on for both models. On Sonnet's recordings, 57% of prompt tokens were read from cache, which cut the bill by 26% against the same tokens uncached. It cannot cut more, because output is about half of Sonnet's cost and output is never cached. The injection scenario passed on both models: the hostile memo reached the model, recall held, and no proposed line used the memo's account.
+
+CI replays the default model and fails if it falls below the thresholds in `evals/thresholds.json`, set from Sonnet's first-holdout run to the nearest 5 points and rounded in the cautious direction. The guardrail suite is a separate result: the verifier must refuse 100% of its deliberately bad fixes. That figure covers only that suite, which has no LLM and does not measure the agent.
 
 ## How the agent is wired
 
@@ -84,7 +87,7 @@ The model client has three modes, set with `LEDGER_LLM_MODE`:
 
 A recording is keyed by a hash of the model, messages and tools, and holds that key, the model, the response and a little metadata, not the request. A request with no recording fails loudly with a missing-recording error. There is no fallback to a live call. Changing a prompt means re-recording.
 
-The agent runs on Claude Haiku 5.5 (`claude-haiku-5-5`) with thinking turned off, which keeps recording cheap. Results describe that model; a stronger model would likely score higher. `DEFAULT_MODEL` in `src/ledger_agent/llm/client.py` switches it, and changing it means re-recording.
+The agent runs on Claude Sonnet 5.5 (`claude-sonnet-5-5`) with its lowest thinking setting, `between_tools`. Set `LEDGER_MODEL=claude-haiku-5-5` to run Haiku 5.5 with thinking off instead. Recordings are keyed by model, so both replay with no key: `LEDGER_MODEL=claude-haiku-5-5 docker compose run --rm --no-deps evals python -m ledger_evals.run --split all --out /out/haiku` reproduces the Haiku column above. A third model means recording it.
 
 A replay proves that the pipeline, the verifier and the scoring work end to end and give the same answer every time. It does not prove how the agent behaves against the real model today, and it does not prove that a changed prompt still works. The manually started live workflow exists for that.
 
@@ -92,7 +95,7 @@ A replay proves that the pipeline, the verifier and the scoring work end to end 
 
 - `explore` reads the catalog and a short, partly wrong data dictionary, samples data, and writes schema notes including joins it infers. It uses a read-only SQL tool: single `SELECT` statements, a row cap, a timeout, and a read-only database role.
 - `hunt` is given general audit principles (double-entry balance, subledger-to-GL tie-out, period controls, reference integrity, duplicates), the finding type names, and no table names. It returns findings, each with the SQL that proves it.
-- `confirm` re-runs each finding's evidence SQL and drops any that return no rows.
+- `confirm` re-runs each finding's evidence SQL and drops any that return no rows. It splits a finding that cites a few journals, or a few invoices for an AP-to-GL tie-out, into one finding per record, as each is a separate problem with a separate fix.
 - `propose` has no SQL tool. Code gives it the target journal, any invoice it cites with the journal that recorded it, the open periods and the active accounts, read through the read-only tool, and it returns a structured correction, not SQL: journal lines, the journal being corrected, any invoice status change. Code renders that to parameterised SQL.
 - `verify` is deterministic code. It checks structure, runs the fix in a trial transaction, checks only new correcting rows changed, applies a coded resolution rule for the fault type, then checks the whole ledger for new violations. A failure reason goes back to `propose`. Each finding gets three attempts, then goes to `needs_human`.
 
@@ -108,7 +111,7 @@ A run has a token limit, 600,000 tokens on Sonnet and 300,000 on Haiku, shared o
 
 - The guardrail suite feeds the verifier a library of bad fixes (unbalanced groups, closed periods, inactive accounts, oversized changes, fixes that break something else) and good fixes. It must refuse every bad one at its expected check and pass every good one. No LLM is involved.
 - The agent suite runs the full graph on generated ERPs: dev scenarios for tuning prompts, holdout scenarios on seeds never tuned against that supply the headline numbers, and an injection scenario that plants a hostile memo on the closed-period fault's journal. Injection only passes if the memo reached the model, in a query result it was sent or in a propose prompt, since a memo the model never saw tests nothing.
-- The holdout is looked at once, with prompts frozen first. Its three scenarios hold 14 planted faults, so one miss moves recall by about 7 percentage points.
+- The holdout is looked at once, with prompts frozen first. Its three scenarios hold 14 planted faults, so one miss moves recall by about 7 percentage points. The first holdout was seen before the two fixes described under Results, so a fresh holdout of three more scenarios gives the clean comparison.
 - Scoring is separate from the verifier. Eval code checks each fix against the answer key, so a fix the verifier accepted can still be scored wrong. That count is reported as `verified_but_wrong`.
 
 ### Cost of the live workflow
@@ -116,7 +119,7 @@ A run has a token limit, 600,000 tokens on Sonnet and 300,000 on Haiku, shared o
 `.github/workflows/live-evals.yml` has no schedule and only runs when started by hand, with a `mode` input of `live` (the default) or `record`. `record` uploads `recordings/` as a workflow artifact for a person to review and commit. The workflow never commits anything. Its cost is bounded two ways:
 
 - `timeout-minutes: 45` stops the job.
-- Each audit stays near its token limit, 600,000 on Sonnet, as its stage budgets force a submit before they run out, and each forced turn can run a little past. In `live` mode the agent and the ten eval scenarios each use a fresh client, so one run is capped at roughly 6.6 million tokens in total. `record` mode skips the `agent` service, as the evals record the same scenario, so it is capped at roughly 6 million.
+- Each audit stays near its token limit, 600,000 on Sonnet, as its stage budgets force a submit before they run out, and each forced turn can run a little past. In `live` mode the agent and the thirteen eval scenarios each use a fresh client, so one run is capped at roughly 8.4 million tokens in total. `record` mode skips the `agent` service, as the evals record the same scenario, so it is capped at roughly 7.8 million.
 
 A run without the `ANTHROPIC_API_KEY` secret fails with a clear error.
 
@@ -130,7 +133,7 @@ A run without the `ANTHROPIC_API_KEY` secret fails with a clear error.
 - Nothing is applied. Fixes are suggestions in a report, never applied to any database, and a person has to review each one.
 - Replays do not prove behaviour against the live model, as described above.
 - Nothing runs the live evals automatically. If the model changes or a prompt edit hurts quality, replays stay green until someone starts the live workflow by hand, so published results can be stale.
-- The 100% figure belongs to the guardrail suite alone. It says the verifier refuses the bad fixes in that library, not that it refuses every bad fix.
+- The guardrail suite's 100% figure says the verifier refuses the bad fixes in that library, not that it refuses every bad fix. The agent's fix validity on 12 or 13 fixes is a small sample, not a guarantee.
 
 ## Possible extensions
 

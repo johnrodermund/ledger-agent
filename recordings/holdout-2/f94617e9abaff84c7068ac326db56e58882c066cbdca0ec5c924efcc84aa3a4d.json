@@ -1,0 +1,40 @@
+{
+  "key": "f94617e9abaff84c7068ac326db56e58882c066cbdca0ec5c924efcc84aa3a4d",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4611,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 567,
+    "stop_reason": "tool_use",
+    "text": "The rejection indicates that crediting 2000 by 18.00 made the AP ledger disagree with the invoice (ap_gl_mismatch for invoice 222). That means the invoice amount (INV_AMT) most likely equals the AP credit of 9,872.12, and the expense debit of 9,890.12 is the mistyped side. The fix is to reduce the expense debit by 18.00 with a one-sided credit to 5300, so the 2000 balance continues to match the invoice.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1368,
+          "lines": [
+            {
+              "acct_cd": "5300    ",
+              "cr_amt": "18.00",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Journal 1368 (invoice V0024-15620-222) has DR 5300 of 9,890.12 and CR 2000 of 9,872.12, so debits exceed credits by 18.00. The previous attempt credited 2000 by 18.00 and was rejected because it broke the AP-to-GL tie for the invoice, which implies the invoice amount and the AP credit (9,872.12) are correct and the expense debit is overstated. The correction is a one-sided credit of 18.00 to 5300 Facilities, which brings the expense to 9,872.12 and balances the journal group while leaving AP Control untouched. The original period 3 is closed, so the line is posted in open period 11. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_01EaUwaxcNC1vsUKYJRt6QdN",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

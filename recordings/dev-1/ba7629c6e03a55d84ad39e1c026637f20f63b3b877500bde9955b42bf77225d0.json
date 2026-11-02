@@ -1,0 +1,40 @@
+{
+  "key": "ba7629c6e03a55d84ad39e1c026637f20f63b3b877500bde9955b42bf77225d0",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4222,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 477,
+    "stop_reason": "tool_use",
+    "text": "The invoice amount of 6883.61 agrees with the AP credit of 6883.61, so the expense debit of 6874.61 is the mistyped figure. The fix is a one-sided debit of 9.00 to 5200 in an open period. That makes the debit 6883.61 and balances the journal group. No invoice status changes, because this is not a duplicate_invoice finding.\n\nJournal 1364 was posted in period 12, which is open, so the correction goes in period 12. The account code 5200 is padded to match the ledger.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1364,
+          "lines": [
+            {
+              "acct_cd": "5200    ",
+              "cr_amt": "0.00",
+              "dr_amt": "9.00",
+              "prd_id": 12
+            }
+          ],
+          "reasoning": "Invoice 230 (6883.61) agrees with the AP credit on 2000, so the expense debit of 6874.61 is the mistyped amount (short by 9.00). A one-sided Dr 5200 of 9.00 in open period 12 brings the debit to 6883.61, balances journal 1364, and ties it to the invoice. No invoice status change, since this is not a duplicate_invoice finding.",
+          "status_changes": []
+        },
+        "id": "toolu_01Nuws76PKrbZEwPjVf2kL54",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "key": "478f54ff679dff61995c23b676e16378815c0ae8c1192e00a4fca5481fd26d98",
+  "metadata": {
+    "message_count": 3,
+    "namespace": "fresh-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1072,
+    "cache_write_tokens": 0,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 158,
+    "stop_reason": "tool_use",
+    "text": "It looks like PostgreSQL, so I'll query information_schema instead.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position"
+        },
+        "id": "toolu_014XCXA9vicPaUkyRkvHWJVQ",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

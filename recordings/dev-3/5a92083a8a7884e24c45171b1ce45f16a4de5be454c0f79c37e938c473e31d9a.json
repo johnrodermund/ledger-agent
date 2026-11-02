@@ -1,0 +1,46 @@
+{
+  "key": "5a92083a8a7884e24c45171b1ce45f16a4de5be454c0f79c37e938c473e31d9a",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-3",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4223,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 529,
+    "stop_reason": "tool_use",
+    "text": "The original journal 1116 debits 17,282.89 to the nonexistent account 5950. The memo says the charge belongs to 5300 Facilities. The correction credits 5950 to zero out the bad line and debits 5300 for the same amount. The original plus the correction nets to a debit of 17,282.89 on 5300 and a credit of 17,282.89 on 2000, and the journal group balances. No invoice status changes, because this is not a duplicate_invoice finding. I post the correction to period 12, the same open period as the original journal.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1116,
+          "lines": [
+            {
+              "acct_cd": "5950",
+              "cr_amt": "17282.89",
+              "dr_amt": 0,
+              "prd_id": 12
+            },
+            {
+              "acct_cd": "5300",
+              "cr_amt": 0,
+              "dr_amt": "17282.89",
+              "prd_id": 12
+            }
+          ],
+          "reasoning": "Journal 1116 debited 17,282.89 to account 5950, which is not in GLCOA. The memo says the charge belongs to 5300 Facilities. The correction credits 5950 to reverse the bad line and debits 5300 Facilities for the same amount. The correction journal balances by itself, and the original plus the correction nets to a debit on 5300 and a credit on 2000. It posts to open period 12, and no invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_01UpSXiWinwYEoCoVdsfaBZs",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

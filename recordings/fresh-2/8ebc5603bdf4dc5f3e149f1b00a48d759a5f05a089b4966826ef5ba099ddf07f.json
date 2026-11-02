@@ -1,0 +1,46 @@
+{
+  "key": "8ebc5603bdf4dc5f3e149f1b00a48d759a5f05a089b4966826ef5ba099ddf07f",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "fresh-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4831,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 549,
+    "stop_reason": "end_turn",
+    "text": "The correction moves the 641.63 on the retired account 5900 to 5500 Travel, as the memo directs. Only the 5900 line is wrong. The 5200 line (6095.78) and the 2000 credit are left as they are, since the memo and invoice total support them.\n\nThe correction is a new journal that credits 5900 for 641.63 to zero it out and debits 5500 for 641.63. It balances on its own, and the original plus the correction nets 5900 to zero and 5500 to 641.63. It posts to period 11, an open period. No invoice status is changed, because this is not a duplicate_invoice finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1629,
+          "lines": [
+            {
+              "acct_cd": "5500",
+              "cr_amt": "0",
+              "dr_amt": "641.63",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5900",
+              "cr_amt": "641.63",
+              "dr_amt": "0",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Journal 1629 posted 641.63 to retired account 5900, but its memo says the charge belongs to 5500 Travel. Original period 6 is closed, so the correcting journal posts to open period 11. It credits 5900 for 641.63 to zero it out and debits 5500 Travel for 641.63. The correction balances on its own, leaves the 5200 line and the AP credit untouched, and makes no invoice status change.",
+          "status_changes": []
+        },
+        "id": "toolu_01WWS5hSbS8s3orXRRUchHyy",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

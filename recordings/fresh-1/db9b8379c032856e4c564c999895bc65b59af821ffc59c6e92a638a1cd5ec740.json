@@ -1,0 +1,38 @@
+{
+  "key": "db9b8379c032856e4c564c999895bc65b59af821ffc59c6e92a638a1cd5ec740",
+  "metadata": {
+    "message_count": 3,
+    "namespace": "fresh-1",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 894,
+    "cache_write_tokens": 178,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 322,
+    "stop_reason": "tool_use",
+    "text": "This looks like Postgres.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position"
+        },
+        "id": "toolu_01PwogGt5hmzfqh13tRDjKQj",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT conrelid::regclass AS tbl, conname, contype, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE connamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname IN ('pg_catalog','information_schema')) ORDER BY 1,2"
+        },
+        "id": "toolu_01YA8gE1ZdL4WR7GuEMxesHn",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

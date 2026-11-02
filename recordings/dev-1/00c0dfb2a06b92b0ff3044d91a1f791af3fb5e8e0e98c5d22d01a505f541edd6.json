@@ -1,0 +1,46 @@
+{
+  "key": "00c0dfb2a06b92b0ff3044d91a1f791af3fb5e8e0e98c5d22d01a505f541edd6",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4226,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 521,
+    "stop_reason": "tool_use",
+    "text": "The invoice amount is 9052.55, but journal 2147 posted 9079.55 to both the expense and AP lines, so both sides are overstated by 27.00. The journal balances, so the fix needs a debit and a credit of 27.00 each.\n\nThe correction reverses the excess in an open period (11). It credits 5400 for 27.00 to reduce the expense, and debits 2000 for 27.00 to reduce the payable. The original lines plus these net to 9052.55 on each side. No invoice status changes, because this is not a duplicate_invoice finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2147,
+          "lines": [
+            {
+              "acct_cd": "2000    ",
+              "cr_amt": "0.00",
+              "dr_amt": "27.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5400    ",
+              "cr_amt": "27.00",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 705 is 9052.55 but journal 2147 posted 9079.55 on both Dr 5400 and Cr 2000, overstating both by 27.00. The correcting journal in open period 11 debits 2000 by 27.00 and credits 5400 by 27.00, so the net is 9052.55 on each account and the group stays balanced. No invoice status change.",
+          "status_changes": []
+        },
+        "id": "toolu_01XxwQzr44CSvDXuEHLSWjf3",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

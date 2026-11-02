@@ -1,0 +1,57 @@
+{
+  "key": "05fd0b0a66ae545d2b659f3339e073bc833d41cb5c7322412be0bfbb5bf3b1ba",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-6",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4997,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 524,
+    "stop_reason": "tool_use",
+    "text": "Invoice 505 is paid (status P), so I keep it and void invoice 801. To reverse journal 2484, each of its lines is flipped and posted in open period 11 (period 10 is closed).",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2484,
+          "lines": [
+            {
+              "acct_cd": "5200",
+              "cr_amt": "4637.81",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5400",
+              "cr_amt": "18729.93",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0.00",
+              "dr_amt": "23367.74",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 801 duplicates invoice 505: same vendor, same INV_NO apart from trailing spaces, same date and amount. Invoice 505 is paid (status P), so it is kept. Invoice 801 is open and is voided. Journal 2484, which recorded 801, is reversed line by line in open period 11, because period 10 is closed. The reversal credits 5200 for 4637.81 and 5400 for 18729.93, and debits 2000 for 23367.74. This removes the double-booked expense and AP liability, and the correction journal balances on its own.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01NHf6WM1nEp4iiX1pMXkbiq",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "key": "ea1312e9adb9dc4432df1efc2c9a88360b58a07decc5fc8c6fafd689fbfc9d16",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4486,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 801,
+    "stop_reason": "tool_use",
+    "text": "Following the duplicate-invoice rule: invoice 602 is paid (P) and was entered first, so keep 602 and void 801. The journal that recorded 801 is 2488. Reversing every line of 2488 means posting the opposite sides in an open period.\n\nJournal 2488 lines: DR 5200 4013.64, DR 5400 5464.72, CR 2000 9478.36. The reversal is CR 5200 4013.64, CR 5400 5464.72, DR 2000 9478.36. I'll post it in open period 11 (the period of the original journal, which is open), so the reversal is in the same period as the original.\n\nChecking balance: the reversal debits 9478.36 and credits 9478.36, so it balances on its own. The net effect across 2488 and the reversal is zero, and the invoice remains voided.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2488,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 9478.36,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5200",
+              "cr_amt": 4013.64,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5400",
+              "cr_amt": 5464.72,
+              "dr_amt": 0,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Duplicate invoice V0020-75786-602 is recorded as INV_ID 602 (STAT_CD P, JRNL_NO 2005, entered first and paid) and INV_ID 801 (STAT_CD O, JRNL_NO 2488, same vendor/amount/date, leading space in INV_NO). Per the rule, keep 602 and void 801. Only 801 is voided, with a single status change to V. Journal 2488 is reversed line-for-line (its lines were DR 5200 4013.64, DR 5400 5464.72, CR 2000 9478.36) and posted to open period 11, the period of the original. The reversal is balanced on its own (DR 9478.36 = CR 9478.36). Journal 2005 is left untouched.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_015pfLE8CQUmjaMZQ5T2BDvL",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

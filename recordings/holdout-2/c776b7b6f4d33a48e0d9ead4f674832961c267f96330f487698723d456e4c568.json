@@ -1,0 +1,45 @@
+{
+  "key": "c776b7b6f4d33a48e0d9ead4f674832961c267f96330f487698723d456e4c568",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "holdout-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1072,
+    "cache_write_tokens": 1278,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 444,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"SYSDICT\" ORDER BY 1,2"
+        },
+        "id": "toolu_013Vt9U7Kv52mgRLDRfRAcMj",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT conrelid::regclass::text t, conname, pg_get_constraintdef(oid) d FROM pg_constraint WHERE connamespace='public'::regnamespace"
+        },
+        "id": "toolu_017GSrn3mv3yi7KSeHVurKZp",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH' t, count(*) FROM \"APINVH\" UNION ALL SELECT 'APPAYM',count(*) FROM \"APPAYM\" UNION ALL SELECT 'APVEND',count(*) FROM \"APVEND\" UNION ALL SELECT 'GLCOA',count(*) FROM \"GLCOA\" UNION ALL SELECT 'GLJRNH',count(*) FROM \"GLJRNH\" UNION ALL SELECT 'GLJRNL',count(*) FROM \"GLJRNL\" UNION ALL SELECT 'GLPERD',count(*) FROM \"GLPERD\""
+        },
+        "id": "toolu_01SPTSsUApR7eNS9iVfkDQRf",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

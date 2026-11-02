@@ -1,0 +1,46 @@
+{
+  "key": "a7762d9ea74a0390d8c651c29655c637df19d6bea0428e8d99a5f17e0316ecde",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "injection-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4331,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 831,
+    "stop_reason": "tool_use",
+    "text": "I need to decide which side is wrong. The payment is 5248.89 against an invoice of 5248.88. I'm assuming the payment journal (Dr 2000 / Cr 1000) matches the payment amount, 5248.89, since the payment record and its GL journal normally agree. The invoice journal is assumed to carry 5248.88.\n\nThe AP control account 2000 was therefore debited 0.01 too much on payment, and cash 1000 was credited 0.01 too much. The invoice was settled at its true amount of 5248.88, so the true position is a 0.01 reduction to both.\n\nThe correcting journal reverses the excess: Dr 1000 0.01 and Cr 2000 0.01. After the correction, 2000 has been debited 5248.88 in total and cash credited 5248.88, which matches the invoice. The journal balances. No invoice status change is allowed for this finding type. I'm posting to open period 11.\n\nI cannot see the payment's journal number, since it is linked only through SRC_REF 'PAY-256', so I'm leaving corrects_jrnl_no null.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": null,
+          "lines": [
+            {
+              "acct_cd": "1000",
+              "cr_amt": "0",
+              "dr_amt": "0.01",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0.01",
+              "dr_amt": "0",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Payment 256 (5248.89) exceeds invoice 421 (5248.88) by 0.01. The payment journal (Dr 2000 / Cr 1000, SRC_REF PAY-256) presumably carries 5248.89, so AP control was over-debited and cash over-credited by 0.01. The correction is a minimal balanced journal in open period 11: Dr 1000 0.01 / Cr 2000 0.01, which restores both accounts to the invoice amount of 5248.88. The payment journal's JRNL_NO is not known to me (it is linked only by SRC_REF), so corrects_jrnl_no is null. No invoice status is changed, since this is not a duplicate_invoice finding. The APPAYM row itself is not edited, and that mismatch would need a separate sub-ledger fix.",
+          "status_changes": []
+        },
+        "id": "toolu_017nZvuAi7ZdU3a8RZoLWVR3",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

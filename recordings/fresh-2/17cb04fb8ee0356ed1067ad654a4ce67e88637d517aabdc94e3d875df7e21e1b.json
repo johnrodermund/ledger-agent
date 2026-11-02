@@ -1,0 +1,30 @@
+{
+  "key": "17cb04fb8ee0356ed1067ad654a4ce67e88637d517aabdc94e3d875df7e21e1b",
+  "metadata": {
+    "message_count": 15,
+    "namespace": "fresh-2",
+    "tool_choice": "submit_schema_notes",
+    "tools": [
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 10807,
+    "cache_write_tokens": 689,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 2200,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "notes": "LEGACY ERP SCHEMA NOTES (PostgreSQL, public schema). Table and column names are UPPERCASE and must be double-quoted in queries; unquoted names fail. sqlite_master does not exist.\n\nTABLES (8 base tables, no views):\n- APINVH (803 rows): AP invoice header. INV_ID int PK; VEND_CD char; INV_NO text (vendor's invoice number); INV_DT int (YYYYMMDD); INV_AMT numeric; STAT_CD char; JRNL_NO int.\n- APPAYM (480 rows): AP payments. PAY_ID int; INV_ID int; PAY_DT int (YYYYMMDD); PAY_AMT numeric.\n- APVEND (24 rows): vendor master. VEND_CD char(8, space padded); VEND_NM text; ACTV_FLG char.\n- GLCOA (10 rows): chart of accounts. ACCT_CD char(8, space padded); ACCT_NM text; ACCT_TYP text; ACTV_FLG char.\n- GLJRNH (1433 rows): journal headers. JRNL_NO int; PRD_ID int; POST_DT int (YYYYMMDD); POST_FLG char; REF_JRNL_NO int (appears unused: all values NULL/0); SRC_CD char; SRC_REF text (user who keyed entry for GL, or invoice reference for AP); MEMO text (free text).\n- GLJRNL (3407 rows): journal lines. JRNL_NO + LN_SEQ = key; ACCT_CD char(8); DR_AMT numeric; CR_AMT numeric.\n- GLPERD (12 rows): fiscal periods, 2024-01 to 2024-12. PRD_ID int; STRT_DT, END_DT, CLOSE_DT int YYYYMMDD (CLOSE_DT NULL for open periods); STAT_CD char.\n- SYSDICT (~40 rows): data dictionary, columns TBL_NM, COL_NM, DESCR.\n\nRELATIONSHIPS (none declared as constraints; all inferred and verified by query):\n- APINVH.VEND_CD -> APVEND.VEND_CD (0 orphans)\n- APINVH.JRNL_NO -> GLJRNH.JRNL_NO (0 orphans); AP invoice journals have GLJRNH.SRC_CD='AP'\n- APPAYM.INV_ID -> APINVH.INV_ID (0 orphans)\n- GLJRNL.JRNL_NO -> GLJRNH.JRNL_NO (0 orphans)\n- GLJRNL.ACCT_CD -> GLCOA.ACCT_CD (0 orphans; compare trimmed codes)\n- GLJRNH.PRD_ID -> GLPERD.PRD_ID (0 orphans)\n\nCONVENTIONS:\n- Dates are integers YYYYMMDD (not DATE type). INV_DT ranges 20240101 to 20241220 in APINVH.\n- Amounts are numeric, unsigned by convention: DR_AMT and CR_AMT are both non-negative with one side zero per line (no violations found). Sign is carried by which column holds the value.\n- Status codes: APINVH.STAT_CD O=open (323), P=paid (480); V=void is documented but NO V rows exist. Paid invoices' INV_AMT equals sum of APPAYM.PAY_AMT (0 mismatches). Open invoices have no payments.\n- GLJRNH.POST_FLG: P=posted (all 1433 rows are P; U documented but unused).\n- GLJRNH.SRC_CD: AP (1283) and GL (150). Documented as AP payables / GL general ledger.\n- GLPERD.STAT_CD: C closed (periods 1-10), O open (11-12). Journals exist in open periods as well as closed ones, all posted.\n- ACTV_FLG: Y/N. GLCOA has one retired account (5900 Legacy Miscellaneous). APVEND all 24 active.\n- ACCT_TYP values in use: ASSET, LIABILITY, EXPENSE. Only 2 ASSET, 2 LIABILITY, 6 EXPENSE accounts; no REVENUE or EQUITY accounts exist (dictionary also lists only those three).\n- SRC_REF on GL journals holds the keying user's name (e.g. KWONG); on AP journals it holds 'V<vendor>-<invoice>' style references.\n\nDATA QUALITY / ANOMALIES FOUND:\n1. Two unbalanced journals: JRNL_NO 2034 (AP, period 11): DR 7439.39 vs CR 7448.39, out of balance by -9.00. JRNL_NO 2386 (GL, period 7): 3 lines, DR 3579.03 vs CR 1794.01+1794.02 = 3588.03, out of balance by -9.00. Both are off by exactly 9.00, suggesting a keying/posting error. Journal-level balance was not enforced.\n2. Negative invoice amount: APINVH INV_ID 801, VEND_CD unknown, INV_AMT -6188.59, status O. Possibly a credit memo stored with a negative sign, contrary to the unsigned-amount convention; needs review.\n3. Dictionary (SYSDICT) inaccuracies: it documents V (void) and U (unposted) status values that do not occur in the data; ACCT_TYP list is incomplete relative to standard accounting (no REVENUE/EQUITY) though none are used; it describes SRC_REF generically as a user name but for AP journals it holds an invoice reference. SYSDICT has no entries for table-level descriptions, keys, or the GLJRNH.REF_JRNL_NO column (which appears unused).\n4. Column types: CHAR-typed codes are space padded (ACCT_CD and VEND_CD char(8)); joins and comparisons must trim or rely on identical padding.\n\nNOT COMPLETED (query budget exhausted): checks for whether AP invoice journal totals equal INV_AMT (a sum-by-expense-line test was attempted but not confirmed), whether POST_DT falls within each period's STRT_DT..END_DT, and whether any POST_DT is NULL or zero. These should be verified in the audit."
+        },
+        "id": "toolu_014zrFR4UVnv4b9dEKV4YT87",
+        "name": "submit_schema_notes"
+      }
+    ]
+  }
+}

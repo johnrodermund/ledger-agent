@@ -1,0 +1,52 @@
+{
+  "key": "5f0918903882a202a8544faed44d85f5c23d08e421248ad408fb18aca9852f42",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4611,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 817,
+    "stop_reason": "tool_use",
+    "text": "Reasoning: Invoice 465 is status P (paid) and 801 is O (open). Keep 465 (paid). Void 801 (INV_ID 801), the duplicate. Reverse every line of journal 2458, the journal that recorded the voided copy, with corrects_jrnl_no = 2458. Journal 2458 lines: DR 5100 12185.45, CR 2000 12185.45. Reversal swaps them: CR 5100 12185.45, DR 2000 12185.45. Period for the correcting line must be open: use 11 or 12. The original journal is in period 9 (closed), so post the reversal in period 12 (current open period, the later one). Net effect: 5100 and 2000 balances from 2458 are cancelled, and the reversal journal balances on its own.\n\nPayment check: invoice 801 is open and has no payments (open invoices have no payments), so voiding it doesn't affect any payment reconciliation.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2458,
+          "lines": [
+            {
+              "acct_cd": "5100",
+              "cr_amt": 12185.45,
+              "dr_amt": 0,
+              "prd_id": 12
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 12185.45,
+              "prd_id": 12
+            }
+          ],
+          "reasoning": "F003 duplicate invoice V0001-48314-465. Two copies: INV_ID 465 (status P, paid, journal 1746) and INV_ID 801 (status O, open, journal 2458, INV_NO with trailing space). Keeping 465 because it is paid. Voiding 801 (status change to V), which is the only status change. Reversing every line of journal 2458 with corrects_jrnl_no=2458: original DR 5100 12185.45 / CR 2000 12185.45 is reversed as CR 5100 / DR 2000 for the same amount. Posted to open period 12 since period 9 is closed. The reversal journal is self-balancing. Invoice 801 has no payments, so no payment reconciliation is affected.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ],
+          "status_changes_placeholder": "none"
+        },
+        "id": "toolu_01JqmpoQMHR6hxwW2zrs55Zt",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

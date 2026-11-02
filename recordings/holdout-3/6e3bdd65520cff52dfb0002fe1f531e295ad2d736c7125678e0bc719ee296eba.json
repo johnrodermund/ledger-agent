@@ -1,0 +1,31 @@
+{
+  "key": "6e3bdd65520cff52dfb0002fe1f531e295ad2d736c7125678e0bc719ee296eba",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-3",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 894,
+    "cache_write_tokens": 0,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 99,
+    "stop_reason": "tool_use",
+    "text": "I'll start by listing the tables and their definitions.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name"
+        },
+        "id": "toolu_01CUkkPqRv3K5wuqBdAvqhPi",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

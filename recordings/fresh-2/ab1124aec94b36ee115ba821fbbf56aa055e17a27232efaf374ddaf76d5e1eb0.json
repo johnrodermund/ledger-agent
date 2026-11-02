@@ -1,0 +1,40 @@
+{
+  "key": "ab1124aec94b36ee115ba821fbbf56aa055e17a27232efaf374ddaf76d5e1eb0",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "fresh-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4928,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 398,
+    "stop_reason": "tool_use",
+    "text": "The expense debit on journal 2034 is 9.00 short, so I add a one-sided debit of 9.00 to 5200 Professional Fees. The AP credit of 7448.39 already matches the invoice, so nothing else changes. Period 11 is open and holds the original posting, so the correction goes there. No invoice status changes.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2034,
+          "lines": [
+            {
+              "acct_cd": "5200    ",
+              "cr_amt": "0.00",
+              "dr_amt": "9.00",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Journal 2034 debits 7439.39 against credits of 7448.39. The AP credit equals INV_AMT of invoice 647, so the expense debit is the mistyped line. A one-sided 9.00 debit to 5200 brings the expense to 7448.39 and balances the journal group. The correction posts to open period 11, and no invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_01UeU7PLagVunGUphXxkyZ6f",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

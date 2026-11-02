@@ -1,0 +1,46 @@
+{
+  "key": "dfd2c04369ba37f549a2fe58518d054d9cc9b736bcaed9ca8c511cd32ec6d710",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "fresh-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 5007,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 489,
+    "stop_reason": "tool_use",
+    "text": "Journal 1452 overstates both the expense (5100) and AP (2000) by 18.00. The invoice amount of 19756.55 is the true figure, so the correction reverses the 18.00 on each account. The original lines plus the correcting lines then net to 19756.55 on both sides, and the journal group stays balanced. Both correcting lines go in period 11, which is open. No invoice status changes, since this is not a duplicate_invoice finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1452,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0.00",
+              "dr_amt": "18.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": "18.00",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Journal 1452 posted 19774.55 to expense 5100 (debit) and AP 2000 (credit), but invoice 285 is 19756.55, so both sides are overstated by 18.00. The correction debits 2000 and credits 5100 for 18.00 in open period 11. The original lines plus the correction net to 19756.55 on each account, and the journal group balances. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_014vKSDoEeaMvDtsMLnejSyt",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

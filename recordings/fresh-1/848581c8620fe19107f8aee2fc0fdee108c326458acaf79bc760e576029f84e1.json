@@ -1,0 +1,57 @@
+{
+  "key": "848581c8620fe19107f8aee2fc0fdee108c326458acaf79bc760e576029f84e1",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "fresh-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4678,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 866,
+    "stop_reason": "tool_use",
+    "text": "Analysis:\n\n- Invoice 249 (journal 1409) is status P (paid), and invoice 801 (journal 2469) is status O (open). Keep the paid copy, 249. Void 801.\n- Journal 2469 is the journal that recorded the voided copy. Reverse every line of it. Its lines are: 5400 DR 9576.37, 5100 DR 5128.37, 2000 CR 14704.74. The reversal swaps the sides: 5400 CR 9576.37, 5100 CR 5128.37, 2000 DR 14704.74.\n- The correction must post to an open period. Journal 2469 is in period 4, which is closed, so the reversal goes into period 11 or 12. I'll use period 11 (November 2024), the earliest open period.\n- All three accounts (5400, 5100, 2000) are active and in the chart.\n- The reversal balances: DR 14704.74 equals CR 9576.37 + 5128.37 = 14704.74.\n- Journal 2469's header has a trailing space in SRC_REF, but that doesn't affect the reversal.\n\nStatus change: invoice 801 goes from O to V. Invoice 249 is untouched.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2469,
+          "lines": [
+            {
+              "acct_cd": "5400",
+              "cr_amt": 9576.37,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": 5128.37,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 14704.74,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "F002 duplicate invoice V0018-47982-249. INV_ID 249 (journal 1409) is paid (P) and is kept. INV_ID 801 (journal 2469) is open (O), a duplicate with a trailing space in INV_NO, and is voided (status O to V). Journal 2469 sits in closed period 4, so its full reversal is posted in open period 11: 5400 CR 9576.37, 5100 CR 5128.37, 2000 DR 14704.74. The reversal balances and uses only active accounts. Journal 1409 and invoice 249 are not changed.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01SkZDAPW8fDu46HmaB6EUKx",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

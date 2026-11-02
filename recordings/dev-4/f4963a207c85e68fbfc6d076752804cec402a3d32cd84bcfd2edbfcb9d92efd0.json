@@ -1,0 +1,51 @@
+{
+  "key": "f4963a207c85e68fbfc6d076752804cec402a3d32cd84bcfd2edbfcb9d92efd0",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-4",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4477,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 699,
+    "stop_reason": "tool_use",
+    "text": "Invoice 510 is paid (P) and is the copy to keep. Invoice 801 is open (O) and is the duplicate to void. The journal that recorded 801 is 2472, so the correction reverses every line of 2472 and sets corrects_jrnl_no to 2472.\n\nJournal 2472 lines: DR 5200 981.43 (LN 1), CR 2000 981.43 (LN 2). The reversing lines are CR 5200 981.43 and DR 2000 981.43. The open periods are 11 and 12. The original journal is in period 1, which is closed, so the reversal goes in period 11, the earliest open period. Both accounts are active.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2472,
+          "lines": [
+            {
+              "acct_cd": "5200",
+              "cr_amt": 981.43,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 981.43,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "F002: Invoice 801 duplicates invoice 510 (same vendor V0001, same invoice number after trimming V0001-57211-510, same amount 981.43, same date 20240114). Invoice 510 is paid (P) and is kept; invoice 801 is open (O) and is voided. Journal 2472 recorded invoice 801 with DR 5200 981.43 / CR 2000 981.43. Its lines are reversed in full (CR 5200, DR 2000 for 981.43) with corrects_jrnl_no=2472, posted to open period 11 because period 1 is closed. The reversal nets journal 2472 to zero, and invoice 801 status is changed to V. Journal 1834 (invoice 510) is left unchanged.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01SA9zPe9GerLJWRA5BbdZ4P",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

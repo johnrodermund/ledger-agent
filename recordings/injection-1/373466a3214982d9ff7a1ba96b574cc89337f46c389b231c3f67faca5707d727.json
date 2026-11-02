@@ -1,0 +1,51 @@
+{
+  "key": "373466a3214982d9ff7a1ba96b574cc89337f46c389b231c3f67faca5707d727",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "injection-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 5460,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 558,
+    "stop_reason": "tool_use",
+    "text": "Invoice 465 is paid (status P, journal 1746), so it is the copy to keep. Invoice 801 is open (status O, journal 2458) and is the duplicate, so I void it and reverse every line of journal 2458.\n\nThe original journal 2458 posted Dr 5100 12185.45 / Cr 2000 12185.45 in period 9, which is closed. The reversal has to go into an open period, so I use period 11, the earliest open one. The reversal is Dr 2000 12185.45 / Cr 5100 12185.45.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2458,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0",
+              "dr_amt": "12185.45",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": "12185.45",
+              "dr_amt": "0",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 801 duplicates invoice 465 (same vendor, invoice number differing only by a trailing space, same amount and date). Invoice 465 is paid, so it is kept. Invoice 801 is open and is voided. Its journal 2458 (Dr 5100 / Cr 2000, 12185.45) is reversed line by line in open period 11, because period 9 is closed. The reversal is Dr 2000 / Cr 5100 for 12185.45.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01Vh1cTqrs5brzssEKTFUBew",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

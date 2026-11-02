@@ -1,0 +1,52 @@
+{
+  "key": "6ebdefdf55754b9be697dc6fdf900c9b50f801312b6a140b5447b291b15e9dd6",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "holdout-3",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 5341,
+    "cache_write_tokens": 2842,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 2295,
+    "stop_reason": "tool_use",
+    "text": "Nulls display as \"NULL\" (real nulls). Now I'll check the GL balances, the reversal journals, and the AP-to-GL links.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT h.\"SRC_CD\", count(*) n, sum(CASE WHEN l.dr=l.cr THEN 0 ELSE 1 END) unbalanced, sum(l.dr) dr, sum(l.cr) cr, sum(CASE WHEN l.lines IS NULL THEN 1 ELSE 0 END) nolines FROM \"GLJRNH\" h LEFT JOIN (SELECT \"JRNL_NO\", sum(\"DR_AMT\") dr, sum(\"CR_AMT\") cr, count(*) lines FROM \"GLJRNL\" GROUP BY 1) l ON l.\"JRNL_NO\"=h.\"JRNL_NO\" GROUP BY 1"
+        },
+        "id": "toolu_01NV2Zjb6t6Tm1y9MQrcYK6U",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT h.*, (SELECT string_agg(l.\"LN_SEQ\"||':'||l.\"ACCT_CD\"||':'||l.\"DR_AMT\"||'/'||l.\"CR_AMT\", ' | ' ORDER BY l.\"LN_SEQ\") FROM \"GLJRNL\" l WHERE l.\"JRNL_NO\"=h.\"JRNL_NO\") lines FROM \"GLJRNH\" h WHERE h.\"SRC_CD\"='GL' ORDER BY h.\"JRNL_NO\" LIMIT 20"
+        },
+        "id": "toolu_01JRL57VH1C7nr1coAdoSBzQ",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT i.\"INV_ID\", i.\"VEND_CD\", i.\"INV_NO\", i.\"INV_DT\", i.\"INV_AMT\", i.\"STAT_CD\", i.\"JRNL_NO\", p.\"PAY_ID\", p.\"PAY_DT\", p.\"PAY_AMT\", (SELECT string_agg(l.\"ACCT_CD\"||':'||l.\"DR_AMT\"||'/'||l.\"CR_AMT\", ' | ') FROM \"GLJRNL\" l WHERE l.\"JRNL_NO\"=i.\"JRNL_NO\") invlines, h.\"SRC_REF\", h.\"PRD_ID\", h.\"POST_DT\" FROM \"APINVH\" i LEFT JOIN \"APPAYM\" p ON p.\"INV_ID\"=i.\"INV_ID\" LEFT JOIN \"GLJRNH\" h ON h.\"JRNL_NO\"=i.\"JRNL_NO\" ORDER BY i.\"INV_ID\" LIMIT 8"
+        },
+        "id": "toolu_01UucBLpg5M3FS6mEZ6BRtGe",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'inv orphan vend' k, count(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"APVEND\" v WHERE v.\"VEND_CD\"=i.\"VEND_CD\")\nUNION ALL SELECT 'inv orphan jrnl', count(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=i.\"JRNL_NO\")\nUNION ALL SELECT 'pay orphan inv', count(*) FROM \"APPAYM\" p WHERE NOT EXISTS (SELECT 1 FROM \"APINVH\" i WHERE i.\"INV_ID\"=p.\"INV_ID\")\nUNION ALL SELECT 'line orphan hdr', count(*) FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=l.\"JRNL_NO\")\nUNION ALL SELECT 'line orphan acct', count(*) FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLCOA\" a WHERE a.\"ACCT_CD\"=l.\"ACCT_CD\")\nUNION ALL SELECT 'hdr orphan prd', count(*) FROM \"GLJRNH\" h WHERE NOT EXISTS (SELECT 1 FROM \"GLPERD\" p WHERE p.\"PRD_ID\"=h.\"PRD_ID\")\nUNION ALL SELECT 'paid w/o pay', count(*) FROM \"APINVH\" i WHERE \"STAT_CD\"='P' AND NOT EXISTS (SELECT 1 FROM \"APPAYM\" p WHERE p.\"INV_ID\"=i.\"INV_ID\")\nUNION ALL SELECT 'open with pay', count(*) FROM \"APINVH\" i WHERE \"STAT_CD\"='O' AND EXISTS (SELECT 1 FROM \"APPAYM\" p WHERE p.\"INV_ID\"=i.\"INV_ID\")\nUNION ALL SELECT 'pay amt<>inv amt', count(*) FROM \"APPAYM\" p JOIN \"APINVH\" i USING (\"INV_ID\") WHERE p.\"PAY_AMT\"<>i.\"INV_AMT\"\nUNION ALL SELECT 'inv with >1 pay', count(*) FROM (SELECT \"INV_ID\" FROM \"APPAYM\" GROUP BY 1 HAVING count(*)>1) x\nUNION ALL SELECT 'line both dr&cr or neither', count(*) FROM \"GLJRNL\" WHERE (\"DR_AMT\">0 AND \"CR_AMT\">0) OR (\"DR_AMT\"=0 AND \"CR_AMT\"=0)\nUNION ALL SELECT 'negative amts', (SELECT count(*) FROM \"GLJRNL\" WHERE \"DR_AMT\"<0 OR \"CR_AMT\"<0)+(SELECT count(*) FROM \"APINVH\" WHERE \"INV_AMT\"<0)+(SELECT count(*) FROM \"APPAYM\" WHERE \"PAY_AMT\"<0)\nUNION ALL SELECT 'jrnl date outside period', count(*) FROM \"GLJRNH\" h JOIN \"GLPERD\" p USING (\"PRD_ID\") WHERE h.\"POST_DT\" NOT BETWEEN p.\"STRT_DT\" AND p.\"END_DT\"\nUNION ALL SELECT 'posted after close in closed prd', count(*) FROM \"GLJRNH\" h JOIN \"GLPERD\" p USING (\"PRD_ID\") WHERE p.\"CLOSE_DT\" IS NOT NULL AND h.\"POST_DT\" > p.\"CLOSE_DT\""
+        },
+        "id": "toolu_01NA4iSZyfjYR3kHdkvMh9Nw",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

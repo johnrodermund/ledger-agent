@@ -1,0 +1,51 @@
+{
+  "key": "d7b0c41b948e91c8f2ee6d277e85007453e20c007966509b096bc4adcd018d75",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 5869,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 484,
+    "stop_reason": "tool_use",
+    "text": "Invoice 465 is paid (status P), so I keep it and void invoice 801, which is open (status O). Its journal 2458 posted Dr 5100 12185.45 and Cr 2000 12185.45. The reversal flips both lines, in open period 11 (period 9 is closed).",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2458,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0.00",
+              "dr_amt": "12185.45",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": "12185.45",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoices 465 and 801 are duplicates (same vendor, amount, date, and invoice number apart from a trailing space). Invoice 465 is paid, so it is kept. Invoice 801 is unpaid and is voided. Journal 2458 recorded 801 (Dr 5100 12185.45, Cr 2000 12185.45), so I reverse both lines with the sides flipped. The reversal posts to open period 11, since period 9 is closed. The journal group balances.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_019ZiJ6aUQCdhyAtYHW38CoR",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

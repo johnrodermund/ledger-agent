@@ -1,0 +1,52 @@
+{
+  "key": "0c02ed5077104b20b831f7c79e60d515c1f6c2978e51c7b0ae0d777438d41ae4",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "dev-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1067,
+    "cache_write_tokens": 1284,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 277,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"SYSDICT\" ORDER BY 1,2"
+        },
+        "id": "toolu_01H8Htwpm8HGekDxcgKvBRnK",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"GLPERD\" ORDER BY 1"
+        },
+        "id": "toolu_01P4EwFp8U7Kb7wgnTpzjVGr",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"GLCOA\" ORDER BY 1"
+        },
+        "id": "toolu_01Cm555egD7de7fCXUSUF9tQ",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"APVEND\" ORDER BY 1"
+        },
+        "id": "toolu_01C5vwQf33tcGzdrnRw3i2b8",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "key": "dc7a394dbca7a49b1356b5e4fd0de258b27132db49b05a74bc5f6cc5f666fe4f",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-5",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4790,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 564,
+    "stop_reason": "tool_use",
+    "text": "The invoice is the source document and is still open, so I treat INV_AMT of 1,950.77 as correct and the journal as understated. The journal recorded 1,932.77, so it is short by 18.00 on both the expense and AP sides.\n\nThe correction adds a debit of 18.00 to 5300 Facilities and a credit of 18.00 to 2000 AP control. This leaves the journal group balanced, and the original lines plus the correction net to 1,950.77 on each side. Period 12 is open, so the lines go there. No invoice status changes, since this is not a duplicate invoice finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2000,
+          "lines": [
+            {
+              "acct_cd": "5300    ",
+              "cr_amt": "0.00",
+              "dr_amt": "18.00",
+              "prd_id": 12
+            },
+            {
+              "acct_cd": "2000    ",
+              "cr_amt": "18.00",
+              "dr_amt": "0.00",
+              "prd_id": 12
+            }
+          ],
+          "reasoning": "Invoice 605 INV_AMT is 1,950.77 (source document, still open, no payment), but journal 2000 booked 1,932.77 to Dr 5300 / Cr 2000. The journal is understated by 18.00 on both sides. A correcting journal in open period 12 adds Dr 5300 18.00 and Cr 2000 18.00, so the original plus the correction net to 1,950.77 on each side and the group stays balanced. No invoice status changes.",
+          "status_changes": []
+        },
+        "id": "toolu_01B1ikPgodwtk8JoDrYmuqA8",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "key": "fe6af50324aabc6dea982d86d8d62732fa57e3f7a7d289e394a0f84f711982c2",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "dev-4",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1072,
+    "cache_write_tokens": 1312,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 433,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"SYSDICT\" ORDER BY 1,2"
+        },
+        "id": "toolu_012BUGjyMRzR6ghwX9hnK3rt",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"GLPERD\" ORDER BY 1"
+        },
+        "id": "toolu_017iRhdJQRSRtH1FpgZNJrZR",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"GLCOA\" ORDER BY 1"
+        },
+        "id": "toolu_013JcBYtsvyLiV9QA38hoQpL",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"APVEND\" ORDER BY 1"
+        },
+        "id": "toolu_01DEnSNBsMmDJ1Bung1svUMP",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT tc.table_name, tc.constraint_type, kcu.column_name, tc.constraint_name FROM information_schema.table_constraints tc LEFT JOIN information_schema.key_column_usage kcu USING (constraint_name, table_schema) WHERE tc.table_schema='public' ORDER BY 1,2"
+        },
+        "id": "toolu_01V3zyVr9dFoJPq5VT9vTREK",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

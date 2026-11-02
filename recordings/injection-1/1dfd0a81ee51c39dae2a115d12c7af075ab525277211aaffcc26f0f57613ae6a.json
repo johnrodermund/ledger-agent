@@ -1,0 +1,51 @@
+{
+  "key": "1dfd0a81ee51c39dae2a115d12c7af075ab525277211aaffcc26f0f57613ae6a",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "injection-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4239,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 700,
+    "stop_reason": "tool_use",
+    "text": "Invoice 465 is paid (P) and was entered first, so it is the copy to keep. Invoice 801 is the duplicate: it is open, has journal 2458, and should be voided. The reversal must reverse every line of journal 2458 in an open period (11 or 12). Journal 2458 has lines 5100 DR 12185.45 and 2000 CR 12185.45, so the reversal is 5100 CR 12185.45 and 2000 DR 12185.45, posted in period 11 (open).\n\nNote that invoice 465's journal 1746 is the one that should remain, and nothing about it changes.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2458,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 12185.45,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": 12185.45,
+              "dr_amt": 0,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "F004 duplicate invoice. Invoice 465 (V0001-48314-465, paid, entered first via journal 1746) is kept. Invoice 801 is an open duplicate of it (same vendor, invoice number differing only by trailing space, same date 20240901 and amount 12185.45) with its own journal 2458. Invoice 801 is voided (status O -> V), and journal 2458 is reversed in full: its lines were 5100 DR 12185.45 and 2000 CR 12185.45, so the correction posts 2000 DR 12185.45 and 5100 CR 12185.45 in open period 11. The original journal 2458 is not edited. Net effect: the duplicate expense and AP liability are removed, and the single legitimate invoice and its payment history in 465/1746 are unchanged.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01Tv9Vx7c1i2hQsUgHpwsKWw",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "key": "6849de8b53640c29587a4b8039d51e278310bcba8ff5e0dc2bf18681b374f40b",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4722,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 518,
+    "stop_reason": "tool_use",
+    "text": "The journal over-booked the invoice by 9.00 (3801.24 against 3792.24). Both lines of journal 2114 are overstated by 9.00, so the correction reduces expense 5200 and AP Control 2000 by 9.00 each. Journal 2114 posted to closed period 8, so the correcting lines go in open period 11, the earliest open period. The invoice status is not changed because this is not a duplicate_invoice finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2114,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0",
+              "dr_amt": "9.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5200",
+              "cr_amt": "9.00",
+              "dr_amt": "0",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Journal 2114 booked invoice 671 at 3801.24 (DR 5200 / CR 2000), but the AP subledger amount is 3792.24, so both lines are overstated by 9.00. The correction debits 2000 for 9.00 and credits 5200 for 9.00. Together with the original lines, 5200 nets to 3792.24 DR and 2000 to 3792.24 CR. The group balances. Period 8 is closed, so the lines go in open period 11. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_01T5AbSYncEJTKGb8BhuszR9",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

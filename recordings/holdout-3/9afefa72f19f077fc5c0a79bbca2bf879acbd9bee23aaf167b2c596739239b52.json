@@ -1,0 +1,46 @@
+{
+  "key": "9afefa72f19f077fc5c0a79bbca2bf879acbd9bee23aaf167b2c596739239b52",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-3",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4073,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 577,
+    "stop_reason": "tool_use",
+    "text": "The invoice header says 13307.11, while journal 2215 recorded 13352.11 on both the expense and AP Control lines. The journal overstates both accounts by 45.00. The header amount is the true one, so the correction reduces the expense (5100) and AP Control (2000) by 45.00 each. It posts as a new journal in open period 11 and changes no invoice status.\n\nCorrecting lines:\n- DR 2000 AP Control 45.00, which reduces the AP credit from 13352.11 to 13307.11.\n- CR 5100 Office Supplies 45.00, which reduces the expense debit from 13352.11 to 13307.11.\n\nThe original journal plus the correction balances, since debits and credits are both 13352.11 originally and 45.00 each in the correction.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2215,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0",
+              "dr_amt": "45.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": "45.00",
+              "dr_amt": "0",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 742 header amount is 13307.11, but journal 2215 posted 13352.11 to both 5100 and 2000, overstating each by 45.00. The correction in open period 11 debits AP Control 45.00 and credits Office Supplies 45.00, so the net journal group is 13307.11 on each account and still balances. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_01NsM3s2bWenmEfuRXgj8erB",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

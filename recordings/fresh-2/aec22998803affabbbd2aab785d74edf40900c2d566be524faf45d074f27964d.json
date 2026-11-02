@@ -1,0 +1,46 @@
+{
+  "key": "aec22998803affabbbd2aab785d74edf40900c2d566be524faf45d074f27964d",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "fresh-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 3682,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 562,
+    "stop_reason": "tool_use",
+    "text": "Journal 1452 is posted in period 2, which is closed, so the correction must go in an open period (11 or 12). The journal overstates both expense (5100 DR) and AP (2000 CR) by 18.00. To reverse the excess, the correction reduces 5100 by a credit of 18.00 and reduces 2000 by a debit of 18.00. That keeps the group balanced and touches only the excess amount.\n\nThe invoice status stays P since this is not a duplicate finding, so no status change.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1452,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 18.0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": 18.0,
+              "dr_amt": 0,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "AP invoice 285 has INV_AMT 19756.55, but its journal 1452 (period 2, closed) records DR 5100 and CR 2000 each at 19774.55, overstating both by 18.00. Posted rows cannot be edited, so this correction reverses the 18.00 excess in open period 11: DR 2000 18.00 and CR 5100 18.00. The group nets to the invoice amount on both sides and balances. Invoice status is unchanged because this is not a duplicate invoice. The correction uses only active accounts 2000 and 5100.",
+          "status_changes": []
+        },
+        "id": "toolu_018EtLRfFpD4EkSNLUt2rrcx",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

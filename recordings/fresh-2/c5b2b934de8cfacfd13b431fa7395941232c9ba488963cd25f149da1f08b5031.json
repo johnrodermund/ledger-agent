@@ -1,0 +1,45 @@
+{
+  "key": "c5b2b934de8cfacfd13b431fa7395941232c9ba488963cd25f149da1f08b5031",
+  "metadata": {
+    "message_count": 13,
+    "namespace": "fresh-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 18190,
+    "cache_write_tokens": 9357,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 1758,
+    "stop_reason": "tool_use",
+    "text": "There are several anomalies. I'll examine the unusual journals (credit memo, rent, the invoice mismatches, the negative invoice, the 5900 usage) and the GL accruals.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT h.\"JRNL_NO\", h.\"PRD_ID\", h.\"POST_DT\", h.\"SRC_CD\", h.\"SRC_REF\", h.\"MEMO\", (SELECT string_agg(l.\"ACCT_CD\"||':'||l.\"DR_AMT\"||'/'||l.\"CR_AMT\", ' | ' ORDER BY l.\"LN_SEQ\") FROM \"GLJRNL\" l WHERE l.\"JRNL_NO\"=h.\"JRNL_NO\") lines, i.\"INV_ID\", i.\"INV_AMT\", i.\"STAT_CD\", i.\"INV_DT\" FROM \"GLJRNH\" h LEFT JOIN \"APINVH\" i ON i.\"JRNL_NO\"=h.\"JRNL_NO\" WHERE h.\"JRNL_NO\">=2430 OR h.\"JRNL_NO\" IN (SELECT \"JRNL_NO\" FROM \"APINVH\" WHERE \"INV_AMT\"<=0) OR h.\"JRNL_NO\" IN (SELECT \"JRNL_NO\" FROM \"GLJRNL\" WHERE \"ACCT_CD\"='5900    ') OR h.\"JRNL_NO\" IN (SELECT i2.\"JRNL_NO\" FROM \"APINVH\" i2 WHERE i2.\"INV_AMT\" <> (SELECT sum(\"CR_AMT\") FROM \"GLJRNL\" l WHERE l.\"JRNL_NO\"=i2.\"JRNL_NO\" AND l.\"ACCT_CD\"='2000    ')) ORDER BY 1"
+        },
+        "id": "toolu_01MRUbH649UhtRU1nzNo3sAc",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'unbalanced' k, h.\"JRNL_NO\"::text a, sum(\"DR_AMT\")::text b, sum(\"CR_AMT\")::text c FROM \"GLJRNL\" l JOIN \"GLJRNH\" h USING(\"JRNL_NO\") GROUP BY h.\"JRNL_NO\" HAVING sum(\"DR_AMT\")<>sum(\"CR_AMT\") UNION ALL SELECT 'ap_vendor_in_srcref_ne_inv_vendor', i.\"INV_ID\"::text, i.\"VEND_CD\", h.\"SRC_REF\" FROM \"APINVH\" i JOIN \"GLJRNH\" h USING(\"JRNL_NO\") WHERE left(h.\"SRC_REF\",5)<>trim(i.\"VEND_CD\") LIMIT 20"
+        },
+        "id": "toolu_01SaqRbRmgwmHib6MdiATQKo",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'pay_jrnl_match' k, count(*)::text a, '' b FROM \"APPAYM\" p JOIN \"GLJRNH\" h ON h.\"SRC_REF\"='PAY-'||p.\"PAY_ID\" JOIN \"GLJRNL\" l ON l.\"JRNL_NO\"=h.\"JRNL_NO\" AND l.\"ACCT_CD\"='2000    ' AND l.\"DR_AMT\"=p.\"PAY_AMT\" AND h.\"POST_DT\"=p.\"PAY_DT\" UNION ALL SELECT 'pay_ids', min(\"PAY_ID\")::text, max(\"PAY_ID\")::text FROM \"APPAYM\" UNION ALL SELECT 'inv_ids', min(\"INV_ID\")::text, max(\"INV_ID\")::text FROM \"APINVH\" UNION ALL SELECT 'gl_lines_per_hdr', \"SRC_CD\"||count(*)::text, '' FROM (SELECT h.\"SRC_CD\", h.\"JRNL_NO\", count(*) FROM \"GLJRNH\" h JOIN \"GLJRNL\" l USING(\"JRNL_NO\") GROUP BY 1,2) x GROUP BY \"SRC_CD\", \"count\" UNION ALL SELECT 'inv_period_mismatch', count(*)::text, '' FROM \"APINVH\" i JOIN \"GLJRNH\" h USING(\"JRNL_NO\") JOIN \"GLPERD\" p ON p.\"PRD_ID\"=h.\"PRD_ID\" WHERE i.\"INV_DT\" NOT BETWEEN p.\"STRT_DT\" AND p.\"END_DT\" UNION ALL SELECT 'vendor_trailing', count(*)::text, max(length(\"VEND_CD\"))::text FROM \"APVEND\" UNION ALL SELECT 'invvend_len', count(distinct length(\"VEND_CD\"))::text, max(length(\"VEND_CD\"))::text FROM \"APINVH\" UNION ALL SELECT 'gl_posts_closed_period_late', count(*)::text, '' FROM \"GLJRNH\" h JOIN \"GLPERD\" p USING(\"PRD_ID\") WHERE p.\"STAT_CD\"='C' AND h.\"SRC_CD\"='GL' AND h.\"POST_DT\">p.\"END_DT\""
+        },
+        "id": "toolu_01NcoxDHaZKawfZjwc6h7Eme",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

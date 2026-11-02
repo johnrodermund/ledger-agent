@@ -1,0 +1,31 @@
+{
+  "key": "ca23230da9e7151ff558b069fe5178f7b3df79909e9a9058764b3a966d761eab",
+  "metadata": {
+    "message_count": 3,
+    "namespace": "dev-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 894,
+    "cache_write_tokens": 173,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 152,
+    "stop_reason": "tool_use",
+    "text": "It's not SQLite, so I'll try information_schema.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position"
+        },
+        "id": "toolu_01KXe59raFQdizNJZLo5AkNm",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

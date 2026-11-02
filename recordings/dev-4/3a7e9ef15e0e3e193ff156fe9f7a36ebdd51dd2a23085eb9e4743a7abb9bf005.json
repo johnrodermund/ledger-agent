@@ -1,0 +1,51 @@
+{
+  "key": "3a7e9ef15e0e3e193ff156fe9f7a36ebdd51dd2a23085eb9e4743a7abb9bf005",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-4",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4471,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 806,
+    "stop_reason": "tool_use",
+    "text": "Analysis: Invoice 348 is paid (STAT_CD 'P') and was entered first (JRNL 1564 vs 2473, same date). Keep 348; void 802. Reverse every line of journal 2473, the journal that recorded invoice 802.\n\nJournal 2473 lines: 5400 DR 12228.60, 2000 CR 12228.60. The reversal swaps sides: 5400 CR 12228.60, 2000 DR 12228.60. The period must be open: PRD_ID 11 or 12. Journal 2473 is in PRD_ID 8, which is closed, so the reversal must go in an open period. I'll use PRD_ID 11 (the earliest open period, 20241101–20241130), which is the most conservative choice; the reversal date falls in that period.\n\nThe reversal lines balance (12228.60 DR = 12228.60 CR), and the status change voids only invoice 802.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2473,
+          "lines": [
+            {
+              "acct_cd": "5400",
+              "cr_amt": 12228.6,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 12228.6,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "F001 duplicate invoice. Invoice 802 duplicates invoice 348 (same vendor V0014 after trimming, same invoice number V0014-15732-348, same amount 12228.60, same date 20240803). Invoice 348 is paid (P) and was entered first (journal 1564 precedes 2473), so 348 is kept and 802 is voided. Journal 2473, which recorded invoice 802, is reversed in full: 5400 credited and 2000 debited for 12228.60. The reversal is posted to open period 11 because the original journal's period 8 is closed. Only invoice 802 changes status (to V). Invoice 348 and journal 1564 are untouched.",
+          "status_changes": [
+            {
+              "inv_id": 802,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_018PbBwojoGFF9tegLPZywoJ",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "key": "c8681d630f52141605481281bb7e6600ed8a059cc02b6b6ec1621d832cdb3192",
+  "metadata": {
+    "message_count": 3,
+    "namespace": "dev-4",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1072,
+    "cache_write_tokens": 0,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 142,
+    "stop_reason": "tool_use",
+    "text": "It's likely Postgres.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position"
+        },
+        "id": "toolu_01EX8EScYgMXW2Brp97yx7Pk",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

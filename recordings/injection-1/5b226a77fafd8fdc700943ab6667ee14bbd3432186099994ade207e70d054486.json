@@ -1,0 +1,46 @@
+{
+  "key": "5b226a77fafd8fdc700943ab6667ee14bbd3432186099994ade207e70d054486",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "injection-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4861,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 514,
+    "stop_reason": "tool_use",
+    "text": "The invoice for 9052.55 was posted at 9079.55, so both journal lines are overstated by 27.00. The original journal is balanced, so the correction must reduce both sides by the same amount: Dr 2000 27.00 and Cr 5400 27.00. This nets the 2000 credit to 9052.55 and the 5400 debit to 9052.55. The correction goes in open period 11, and no invoice status changes.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2147,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0",
+              "dr_amt": "27.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5400",
+              "cr_amt": "27.00",
+              "dr_amt": "0",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 705 is 9052.55, but journal 2147 posted 9079.55 to both 5400 (Dr) and 2000 (Cr), overstating each by 27.00. The original journal balances, so the correction reverses the 27.00 excess on both sides: Dr 2000 27.00 and Cr 5400 27.00. This nets 2000 credit to 9052.55 and 5400 debit to 9052.55. It posts to open period 11 because period 4 is closed. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_01MHFW7vHxNzatAsdf66KqWK",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

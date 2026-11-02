@@ -1,0 +1,45 @@
+{
+  "key": "0a5e03f042dc416fddb1f07567ebf034246c19fc19c6d30033e0acadf78b3c73",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "fresh-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1072,
+    "cache_write_tokens": 1290,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 519,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"SYSDICT\" ORDER BY 1,2"
+        },
+        "id": "toolu_01CrLA5DeeHsW7SxeE3g4frX",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT tc.table_name, tc.constraint_type, tc.constraint_name, kcu.column_name FROM information_schema.table_constraints tc LEFT JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema WHERE tc.table_schema='public' ORDER BY 1,2"
+        },
+        "id": "toolu_01GreR6eFSuQPQaJiriRHWhP",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'GLPERD' t, count(*) FROM \"GLPERD\" UNION ALL SELECT 'GLJRNH', count(*) FROM \"GLJRNH\" UNION ALL SELECT 'GLJRNL', count(*) FROM \"GLJRNL\" UNION ALL SELECT 'GLCOA', count(*) FROM \"GLCOA\" UNION ALL SELECT 'APINVH', count(*) FROM \"APINVH\" UNION ALL SELECT 'APPAYM', count(*) FROM \"APPAYM\" UNION ALL SELECT 'APVEND', count(*) FROM \"APVEND\""
+        },
+        "id": "toolu_01X49kNtrgzuUbr7FGYigbkQ",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

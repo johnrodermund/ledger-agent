@@ -1,0 +1,46 @@
+{
+  "key": "ca486c53e068ce2f463061ed64fdfe8ffe450d4ba0f6c54c460be4e688bc1e8d",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4782,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 566,
+    "stop_reason": "tool_use",
+    "text": "Invoice 743 is for 23,078.91, but journal 2221 records only 23,051.91 on both sides, so it is 27.00 short. The invoice amount is the source document, so the ledger is the side to fix. I'm adding a 27.00 debit to expense 5300 and a 27.00 credit to AP Control 2000 in open period 11, the same period as the original journal. The original journal and the correction together then balance and tie to the invoice.\n\nInvoices 222 and 757 are listed in the finding summary, but this finding covers invoice 743 only, so I'm leaving those alone. The invoice amount itself is not changed, and no invoice status is changed.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2221,
+          "lines": [
+            {
+              "acct_cd": "5300",
+              "cr_amt": "0",
+              "dr_amt": "27.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": "27.00",
+              "dr_amt": "0",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 743 is 23,078.91 but journal 2221 posted only 23,051.91 (DR 5300 / CR 2000), which is 27.00 short on both sides. The correction adds DR 5300 27.00 and CR 2000 27.00 in open period 11, so the original plus the correction ties to the invoice and stays balanced. Invoices 222 and 757 are out of scope for this finding. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_0152jR1Tk4Yaexg5JbuvRWmX",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

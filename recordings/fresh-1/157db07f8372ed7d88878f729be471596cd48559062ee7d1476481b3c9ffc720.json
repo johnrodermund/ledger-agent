@@ -1,0 +1,57 @@
+{
+  "key": "157db07f8372ed7d88878f729be471596cd48559062ee7d1476481b3c9ffc720",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "fresh-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 5405,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 558,
+    "stop_reason": "tool_use",
+    "text": "Invoice 249 was paid and entered first, so I keep it. I void invoice 801 and reverse every line of its journal 2469 (DR 5400 9576.37, DR 5100 5128.37, CR 2000 14704.74) with swapped sides. The original period 4 is closed, so the reversal goes in period 11, the earliest open period.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2469,
+          "lines": [
+            {
+              "acct_cd": "5400",
+              "cr_amt": "9576.37",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": "5128.37",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": "0.00",
+              "dr_amt": "14704.74",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 801 duplicates invoice 249 (same vendor, same invoice number apart from a trailing space, same date and amount). Invoice 249 is paid and entered first, so it stays. Invoice 801 is voided. Its journal 2469 is reversed line by line with debits and credits swapped (CR 5400 9576.37, CR 5100 5128.37, DR 2000 14704.74), which removes the double-booked expense and AP liability. The reversal is posted in open period 11 because period 4 is closed.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01Kc1R3u5zuxMZZer7dtAw7u",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "key": "ce430e1373bec2b174a0072dee787abf72725eb743135cde54f2a14530ad2898",
+  "metadata": {
+    "message_count": 11,
+    "namespace": "fresh-1",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 8575,
+    "cache_write_tokens": 2876,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 1580,
+    "stop_reason": "tool_use",
+    "text": "AP journals are 1323 in number: 804 invoices plus 519 payments. I'll check how they link to the AP tables, along with the formats of the codes and dates.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT 'inv_journal_src' k, h.\"SRC_CD\" a, count(*)::text b, min(h.\"SRC_REF\") c, max(h.\"SRC_REF\") d FROM \"APINVH\" i JOIN \"GLJRNH\" h USING(\"JRNL_NO\") GROUP BY 2\nUNION ALL SELECT 'inv_srcref_eq_vend-invno', count(*)::text, sum(CASE WHEN h.\"SRC_REF\"=trim(i.\"VEND_CD\")||'-'||i.\"INV_NO\" THEN 1 ELSE 0 END)::text, '', '' FROM \"APINVH\" i JOIN \"GLJRNH\" h USING(\"JRNL_NO\")\nUNION ALL SELECT 'ap_journals_not_inv', count(*)::text, min(h.\"SRC_REF\"), max(h.\"SRC_REF\"), min(h.\"MEMO\") FROM \"GLJRNH\" h WHERE h.\"SRC_CD\"='AP' AND NOT EXISTS (SELECT 1 FROM \"APINVH\" i WHERE i.\"JRNL_NO\"=h.\"JRNL_NO\")\nUNION ALL SELECT 'inv_date_vs_post', count(*)::text, sum(CASE WHEN i.\"INV_DT\"=h.\"POST_DT\" THEN 1 ELSE 0 END)::text, sum(CASE WHEN i.\"INV_DT\">h.\"POST_DT\" THEN 1 ELSE 0 END)::text, '' FROM \"APINVH\" i JOIN \"GLJRNH\" h USING(\"JRNL_NO\")\nUNION ALL SELECT 'vend_cd_len', count(*)::text, min(length(\"VEND_CD\"))::text, max(length(\"VEND_CD\"))::text, min(\"VEND_CD\") FROM \"APVEND\"\nUNION ALL SELECT 'vend_sample', count(*)::text, min(\"VEND_NM\"), max(\"VEND_NM\"), '' FROM \"APVEND\"\nUNION ALL SELECT 'pay_date_before_inv', count(*)::text, '', '', '' FROM \"APPAYM\" p JOIN \"APINVH\" i USING(\"INV_ID\") WHERE p.\"PAY_DT\"<i.\"INV_DT\"\nUNION ALL SELECT 'pay_multi', count(*)::text, '', '', '' FROM (SELECT 1 FROM \"APPAYM\" GROUP BY \"INV_ID\" HAVING count(*)>1) x\nUNION ALL SELECT 'inv_ids', min(\"INV_ID\")::text, max(\"INV_ID\")::text, count(*)::text, '' FROM \"APINVH\"\nUNION ALL SELECT 'pay_ids', min(\"PAY_ID\")::text, max(\"PAY_ID\")::text, count(*)::text, '' FROM \"APPAYM\"\nUNION ALL SELECT 'inv_neg_openstat', count(*)::text, '', '', '' FROM \"APINVH\" WHERE \"INV_AMT\"<0\nUNION ALL SELECT 'ap_in_closed_unposted_period', count(*)::text, '', '', '' FROM \"GLJRNH\" h JOIN \"GLPERD\" p USING(\"PRD_ID\") WHERE p.\"STAT_CD\"='C' AND h.\"POST_DT\">p.\"CLOSE_DT\"\nUNION ALL SELECT 'gl_users', \"SRC_REF\", count(*)::text, '', '' FROM \"GLJRNH\" WHERE \"SRC_CD\"='GL' GROUP BY \"SRC_REF\""
+        },
+        "id": "toolu_01KxfR8NSY2cE659JLbpHVTr",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT h.\"JRNL_NO\", h.\"PRD_ID\", h.\"POST_DT\", h.\"SRC_REF\", h.\"MEMO\", l.\"LN_SEQ\", l.\"ACCT_CD\", l.\"DR_AMT\", l.\"CR_AMT\" FROM \"GLJRNH\" h JOIN \"GLJRNL\" l USING(\"JRNL_NO\") WHERE h.\"JRNL_NO\" IN (2319,2320,2470,2471,1979,141,1075) OR h.\"JRNL_NO\" IN (SELECT \"JRNL_NO\" FROM \"APINVH\" WHERE \"INV_ID\" IN (141,802)) ORDER BY 1,6"
+        },
+        "id": "toolu_0167t43pUCNEWVEt34J2dMDA",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

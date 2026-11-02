@@ -1,0 +1,38 @@
+{
+  "key": "8aa0978fdee5f1c26e9f6a9410949437d6511956279147d94386163edf3de9c7",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "dev-6",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 4155,
+    "cache_write_tokens": 8396,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 2077,
+    "stop_reason": "tool_use",
+    "text": "Key findings so far: status 'V' (void) is documented but never occurs, and negative invoice amounts exist. Next I'll look at the journal structure, the reversal, orphans, and the balance.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT h.*, (SELECT count(*) FROM \"GLJRNL\" l WHERE l.\"JRNL_NO\"=h.\"JRNL_NO\") nlines FROM \"GLJRNH\" h WHERE h.\"REF_JRNL_NO\" IS NOT NULL OR h.\"SRC_CD\"='GL' AND h.\"JRNL_NO\" IN (SELECT min(\"JRNL_NO\") FROM \"GLJRNH\" WHERE \"SRC_CD\"='GL') OR h.\"JRNL_NO\" IN (SELECT min(\"JRNL_NO\") FROM \"GLJRNH\" WHERE \"SRC_CD\"='AP') OR h.\"JRNL_NO\" IN (SELECT \"REF_JRNL_NO\" FROM \"GLJRNH\")"
+        },
+        "id": "toolu_01LYtkQBmZTKHaXgCfmdttMG",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'lines_no_header' k, count(*) c FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=l.\"JRNL_NO\")\nUNION ALL SELECT 'header_no_lines', count(*) FROM \"GLJRNH\" h WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNL\" l WHERE h.\"JRNL_NO\"=l.\"JRNL_NO\")\nUNION ALL SELECT 'lines_bad_acct', count(*) FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLCOA\" c WHERE c.\"ACCT_CD\"=l.\"ACCT_CD\")\nUNION ALL SELECT 'unbalanced_journals', count(*) FROM (SELECT \"JRNL_NO\" FROM \"GLJRNL\" GROUP BY 1 HAVING sum(\"DR_AMT\")<>sum(\"CR_AMT\")) x\nUNION ALL SELECT 'neg_or_both_lines', count(*) FROM \"GLJRNL\" WHERE \"DR_AMT\"<0 OR \"CR_AMT\"<0 OR (\"DR_AMT\"<>0 AND \"CR_AMT\"<>0)\nUNION ALL SELECT 'null_amt_lines', count(*) FROM \"GLJRNL\" WHERE \"DR_AMT\" IS NULL OR \"CR_AMT\" IS NULL\nUNION ALL SELECT 'inv_bad_vend', count(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"APVEND\" v WHERE v.\"VEND_CD\"=i.\"VEND_CD\")\nUNION ALL SELECT 'inv_bad_jrnl', count(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=i.\"JRNL_NO\")\nUNION ALL SELECT 'pay_bad_inv', count(*) FROM \"APPAYM\" p WHERE NOT EXISTS (SELECT 1 FROM \"APINVH\" i WHERE i.\"INV_ID\"=p.\"INV_ID\")\nUNION ALL SELECT 'jh_bad_prd', count(*) FROM \"GLJRNH\" h WHERE NOT EXISTS (SELECT 1 FROM \"GLPERD\" p WHERE p.\"PRD_ID\"=h.\"PRD_ID\")\nUNION ALL SELECT 'jh_date_outside_prd', count(*) FROM \"GLJRNH\" h JOIN \"GLPERD\" p ON p.\"PRD_ID\"=h.\"PRD_ID\" WHERE h.\"POST_DT\" NOT BETWEEN p.\"STRT_DT\" AND p.\"END_DT\"\nUNION ALL SELECT 'jh_post_in_closed_after_close', count(*) FROM \"GLJRNH\" h JOIN \"GLPERD\" p ON p.\"PRD_ID\"=h.\"PRD_ID\" WHERE p.\"CLOSE_DT\" IS NOT NULL AND h.\"POST_DT\">p.\"CLOSE_DT\"\nUNION ALL SELECT 'paid_inv_pay_mismatch', count(*) FROM \"APINVH\" i WHERE i.\"STAT_CD\"='P' AND i.\"INV_AMT\" <> (SELECT coalesce(sum(\"PAY_AMT\"),0) FROM \"APPAYM\" p WHERE p.\"INV_ID\"=i.\"INV_ID\")\nUNION ALL SELECT 'open_inv_with_pay', count(*) FROM \"APINVH\" i WHERE i.\"STAT_CD\"='O' AND EXISTS (SELECT 1 FROM \"APPAYM\" p WHERE p.\"INV_ID\"=i.\"INV_ID\")\nUNION ALL SELECT 'dup_inv_no_vend', count(*) FROM (SELECT \"VEND_CD\",\"INV_NO\" FROM \"APINVH\" GROUP BY 1,2 HAVING count(*)>1) x\nUNION ALL SELECT 'dup_jrnl_no', count(*) FROM (SELECT \"JRNL_NO\" FROM \"GLJRNH\" GROUP BY 1 HAVING count(*)>1) x\nUNION ALL SELECT 'inv_multi_pay', count(*) FROM (SELECT \"INV_ID\" FROM \"APPAYM\" GROUP BY 1 HAVING count(*)>1) x\nUNION ALL SELECT 'inv_jrnl_shared', count(*) FROM (SELECT \"JRNL_NO\" FROM \"APINVH\" GROUP BY 1 HAVING count(*)>1) x"
+        },
+        "id": "toolu_01QPohCeasSvK2N8Vx7JEamc",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

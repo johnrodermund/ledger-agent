@@ -1,8 +1,8 @@
 {
-  "recall": 0.75,
-  "precision": 0.70,
-  "fix_validity": 0.90,
-  "end_to_end_fix_rate": 0.70,
+  "recall": 0.90,
+  "precision": 0.65,
+  "fix_validity": 0.95,
+  "end_to_end_fix_rate": 0.90,
   "decoy_false_alarm_rate": 0.40,
-  "needs_human_rate": 0.30
+  "needs_human_rate": 0.35
 }

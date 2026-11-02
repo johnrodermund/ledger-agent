@@ -1,0 +1,57 @@
+{
+  "key": "ee5dd8d592ce9d96a0c57d1416284242156395a037474b8d8c0230276c1ae2d2",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 5368,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 520,
+    "stop_reason": "tool_use",
+    "text": "Invoice 602 is paid and was entered first, so I keep it and void invoice 801, which is open. Journal 2488 recorded invoice 801, so I reverse each of its lines in open period 11, the period of the original posting.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2488,
+          "lines": [
+            {
+              "acct_cd": "5200",
+              "cr_amt": "4013.64",
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5400",
+              "cr_amt": "5464.72",
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": "9478.36",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoices 602 and 801 are the same vendor document: same vendor, amount 9478.36 and date, with 801's INV_NO differing only by a leading space. Invoice 602 is paid and was entered first, so it is kept. Invoice 801 is open and is voided. Journal 2488 recorded 801 as DR 5200 4013.64, DR 5400 5464.72 and CR 2000 9478.36. The correction reverses each line with the opposite side, so the original and correction journals balance and net to zero. All lines post to open period 11.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01CbrKNQnU4A86bMUTnc4Bmf",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

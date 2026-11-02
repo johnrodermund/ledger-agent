@@ -1,0 +1,57 @@
+{
+  "key": "21cbeecce2913c0022c170aab8cef82af11934439c878197d9e119b7633f2f5c",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-6",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4525,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 902,
+    "stop_reason": "tool_use",
+    "text": "Analysis of F004:\n\n- Duplicate pair: INV_ID 505 (journal 1846, status P) and INV_ID 801 (journal 2484, status O). Same vendor, same invoice number after normalisation, same date and amount.\n- Keep rule: keep the paid copy, which is 505. Void 801.\n- Journal to reverse: 2484, the journal that recorded the voided copy 801. Reverse each of its lines (swap DR and CR) in an open period, with corrects_jrnl_no = 2484.\n- Journal 2484 lines: 5200 DR 4637.81; 5400 DR 18729.93; 2000 CR 23367.74. Reversal: 5200 CR 4637.81; 5400 CR 18729.93; 2000 DR 23367.74.\n- Open period: 11 (20241101 to 20241130). All three accounts (5200, 5400, 2000) are active.\n- Status change: APINVH 801 to V. No other invoice changes.\n\nReversal balances: CR 23367.74 equals DR 23367.74.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2484,
+          "lines": [
+            {
+              "acct_cd": "5200",
+              "cr_amt": 4637.81,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5400",
+              "cr_amt": 18729.93,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 23367.74,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "F004 is a confirmed duplicate of V0015-18723-505. INV_ID 505 (journal 1846) is paid (P), so it is kept. INV_ID 801 (journal 2484) is open (O), a duplicate entered later, so it is voided with a single status change to V. Journal 2484 recorded the voided copy, so every line is reversed (DR and CR swapped) in open period 11, referencing corrects_jrnl_no 2484. The reversal nets journal 2484 to zero and balances (CR 23367.74 = DR 23367.74). Accounts 5200, 5400 and 2000 are active. Journal 1846 and invoice 505 are not changed.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_012goBsvYTQBNgywU1yj3TPh",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

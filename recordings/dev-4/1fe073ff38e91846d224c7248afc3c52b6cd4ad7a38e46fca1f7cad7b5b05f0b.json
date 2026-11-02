@@ -1,0 +1,31 @@
+{
+  "key": "1fe073ff38e91846d224c7248afc3c52b6cd4ad7a38e46fca1f7cad7b5b05f0b",
+  "metadata": {
+    "message_count": 13,
+    "namespace": "dev-4",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 13932,
+    "cache_write_tokens": 1820,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 1472,
+    "stop_reason": "tool_use",
+    "text": "I'll rerun the first query with the stray inner LIMIT removed.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT 'post_after_close' k, h.\"JRNL_NO\"::text a, h.\"POST_DT\"::text b, p.\"CLOSE_DT\"::text c, h.\"SRC_CD\" d, h.\"MEMO\" e FROM \"GLJRNH\" h JOIN \"GLPERD\" p USING(\"PRD_ID\") WHERE p.\"CLOSE_DT\" IS NOT NULL AND h.\"POST_DT\">p.\"CLOSE_DT\"\nUNION ALL SELECT 'gl_journals', h.\"JRNL_NO\"::text, h.\"PRD_ID\"::text, h.\"POST_DT\"::text, h.\"SRC_REF\", h.\"MEMO\" FROM \"GLJRNH\" h WHERE h.\"SRC_CD\"='GL' AND h.\"JRNL_NO\" NOT IN (2463,2474) AND h.\"JRNL_NO\" NOT IN (SELECT \"JRNL_NO\" FROM \"GLJRNH\" WHERE \"MEMO\"='Manual accrual')\nUNION ALL SELECT 'acct5900', l.\"JRNL_NO\"::text, l.\"DR_AMT\"::text, l.\"CR_AMT\"::text, h.\"POST_DT\"::text, h.\"MEMO\" FROM \"GLJRNL\" l JOIN \"GLJRNH\" h USING(\"JRNL_NO\") WHERE l.\"ACCT_CD\" LIKE '5900%'\nUNION ALL SELECT 'cm_jrnl', h.\"JRNL_NO\"::text, h.\"POST_DT\"::text, h.\"PRD_ID\"::text, h.\"MEMO\", (SELECT string_agg(l.\"ACCT_CD\"||':'||l.\"DR_AMT\"||'/'||l.\"CR_AMT\", ' | ') FROM \"GLJRNL\" l WHERE l.\"JRNL_NO\"=h.\"JRNL_NO\") FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=2475\nUNION ALL SELECT 'pay_jrnl_sample', h.\"JRNL_NO\"::text, h.\"SRC_REF\", h.\"MEMO\", (SELECT string_agg(l.\"ACCT_CD\"||':'||l.\"DR_AMT\"||'/'||l.\"CR_AMT\", ' | ') FROM \"GLJRNL\" l WHERE l.\"JRNL_NO\"=h.\"JRNL_NO\"), '' FROM \"GLJRNH\" h WHERE h.\"SRC_REF\" IN ('PAY-24','PAY-30')\nUNION ALL SELECT 'pay_ref_match', count(*)::text, '', '', '', '' FROM \"APPAYM\" p JOIN \"GLJRNH\" h ON h.\"SRC_REF\"='PAY-'||p.\"PAY_ID\"\nUNION ALL SELECT 'inv_dt_vs_post', count(*)::text, sum((i.\"INV_DT\"<>h.\"POST_DT\")::int)::text, '', '', '' FROM \"APINVH\" i JOIN \"GLJRNH\" h USING(\"JRNL_NO\")\nUNION ALL SELECT 'inv_ref_match', count(*)::text, sum((h.\"SRC_REF\"=i.\"VEND_CD\"||'-'||i.\"INV_NO\")::int)::text, sum((h.\"SRC_REF\"=trim(i.\"VEND_CD\")||'-'||i.\"INV_NO\")::int)::text, min(i.\"INV_NO\"), '' FROM \"APINVH\" i JOIN \"GLJRNH\" h USING(\"JRNL_NO\")\nUNION ALL SELECT 'vend_cd_len', length(\"VEND_CD\")::text, count(*)::text, pg_typeof(\"VEND_CD\")::text, '', '' FROM \"APINVH\" GROUP BY length(\"VEND_CD\"), pg_typeof(\"VEND_CD\")\nUNION ALL SELECT 'pay_dt_vs_jrnl', count(*)::text, sum((p.\"PAY_DT\"<>h.\"POST_DT\")::int)::text, '', '', '' FROM \"APPAYM\" p JOIN \"GLJRNH\" h ON h.\"SRC_REF\"='PAY-'||p.\"PAY_ID\""
+        },
+        "id": "toolu_011gHC4Szj73bcs1wPzcePG4",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

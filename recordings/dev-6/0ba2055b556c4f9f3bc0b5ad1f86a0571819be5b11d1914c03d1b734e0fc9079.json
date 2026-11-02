@@ -1,0 +1,40 @@
+{
+  "key": "0ba2055b556c4f9f3bc0b5ad1f86a0571819be5b11d1914c03d1b734e0fc9079",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-6",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4167,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 421,
+    "stop_reason": "tool_use",
+    "text": "Journal 1361 debits 5200 for 18270.61 but credits AP Control for only 18234.61. The invoice 212 amount is 18234.61, so the expense debit is overstated by 36.00.\n\nThe correction is a single credit of 36.00 to 5200, which reduces the expense to 18234.61 and balances the journal group. It goes in open period 11, with no invoice status change.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1361,
+          "lines": [
+            {
+              "acct_cd": "5200",
+              "cr_amt": "36.00",
+              "dr_amt": 0,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Journal 1361 (invoice 212, 18234.61) debits 5200 for 18270.61 but credits 2000 for 18234.61, so the expense is overstated by 36.00. A one-sided credit of 36.00 to 5200 in open period 11 brings the expense to the invoice amount and balances the journal group. No invoice status change, since this is not a duplicate invoice.",
+          "status_changes": []
+        },
+        "id": "toolu_01SX5hzEKrPZ3BcZ7p6GGCzL",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

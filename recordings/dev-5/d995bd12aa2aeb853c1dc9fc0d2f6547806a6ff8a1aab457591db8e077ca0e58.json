@@ -1,0 +1,45 @@
+{
+  "key": "d995bd12aa2aeb853c1dc9fc0d2f6547806a6ff8a1aab457591db8e077ca0e58",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "dev-5",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1067,
+    "cache_write_tokens": 1277,
+    "content": null,
+    "input_tokens": 2,
+    "output_tokens": 440,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"SYSDICT\" ORDER BY 1,2"
+        },
+        "id": "toolu_018K7tnMKN1naCiv8fzCTd27",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH' t, count(*) FROM \"APINVH\" UNION ALL SELECT 'APPAYM',count(*) FROM \"APPAYM\" UNION ALL SELECT 'APVEND',count(*) FROM \"APVEND\" UNION ALL SELECT 'GLCOA',count(*) FROM \"GLCOA\" UNION ALL SELECT 'GLJRNH',count(*) FROM \"GLJRNH\" UNION ALL SELECT 'GLJRNL',count(*) FROM \"GLJRNL\" UNION ALL SELECT 'GLPERD',count(*) FROM \"GLPERD\""
+        },
+        "id": "toolu_01XZaqteefh7MTxx6beCkSLb",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT conrelid::regclass, conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace"
+        },
+        "id": "toolu_01DzVsxmxKzn54iEx85QPod4",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

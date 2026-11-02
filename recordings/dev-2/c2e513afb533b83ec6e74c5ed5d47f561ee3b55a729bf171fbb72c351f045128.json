@@ -1,0 +1,40 @@
+{
+  "key": "c2e513afb533b83ec6e74c5ed5d47f561ee3b55a729bf171fbb72c351f045128",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4568,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 419,
+    "stop_reason": "tool_use",
+    "text": "The credit to AP Control (18,923.45) equals the invoice amount, so the expense debit is the side that is wrong. The fix is a single debit of 9.00 to 5400, which brings the original debit from 18,914.45 up to 18,923.45. Journal 2291 is in period 12, which is open, so the correction can post there. No invoice status changes, because this is not a duplicate_invoice finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2291,
+          "lines": [
+            {
+              "acct_cd": "5400",
+              "cr_amt": "0.00",
+              "dr_amt": "9.00",
+              "prd_id": 12
+            }
+          ],
+          "reasoning": "Journal 2291 (invoice V0024-44173-798) has Dr 5400 18,914.45 against Cr 2000 18,923.45. The AP credit equals the invoice amount, so the expense debit is short by 9.00. A one-sided debit of 9.00 to 5400 in open period 12 balances the journal group. No invoice status is changed.",
+          "status_changes": []
+        },
+        "id": "toolu_017gfnFVRMaJr3wewyNFdtX7",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "key": "406fa4a052f895cf3e519c8334e538b6d60002b45d7ea7355bd8d5316abc17b2",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "fresh-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 4583,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 485,
+    "stop_reason": "tool_use",
+    "text": "The invoice is 14357.03, but journal 1544 recorded only 14339.03 on both the expense line (5300) and the AP control line (2000). The journal is balanced, and both lines are short by 18.00. The correction therefore adds 18.00 to each of the two accounts: DR 5300 and CR 2000. This keeps the journal group balanced. Period 11 is open, and the original journal is in period 11 as well. No invoice status changes are needed.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 1544,
+          "lines": [
+            {
+              "acct_cd": "5300",
+              "cr_amt": "0.00",
+              "dr_amt": "18.00",
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": "18.00",
+              "dr_amt": "0.00",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 328 is 14357.03 but journal 1544 posted 14339.03 to both 5300 (DR) and 2000 (CR), so both are short by 18.00. The correction adds DR 5300 18.00 and CR 2000 18.00 in open period 11, so the original plus the correction nets to 14357.03 on each side and stays balanced. No invoice status change.",
+          "status_changes": []
+        },
+        "id": "toolu_01B2jSHBUwT73ukd826LnPqN",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

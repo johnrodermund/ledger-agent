@@ -1,0 +1,57 @@
+{
+  "key": "4ac357adb6976bb99ae977b4ea672e03365d1f696f5a51514603577dd38051b8",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "dev-2",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-sonnet-5-5",
+  "response": {
+    "cache_read_tokens": 1027,
+    "cache_write_tokens": 5430,
+    "content": null,
+    "input_tokens": 4,
+    "output_tokens": 507,
+    "stop_reason": "tool_use",
+    "text": "Invoice 452 is paid and was entered first, so it is kept. Invoice 801 is the open duplicate and is voided. Its journal 2445 is reversed line by line in open period 11: credit 5400 for 17,532.66, credit 5100 for 5,950.96, and debit 2000 for 23,483.62. The reversal balances.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2445,
+          "lines": [
+            {
+              "acct_cd": "5400",
+              "cr_amt": "17532.66",
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": "5950.96",
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": "23483.62",
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 801 duplicates invoice 452. Invoice 452 is paid and was entered first, so it is kept. Invoice 801 is open and is voided. Its journal 2445 is reversed line by line in open period 11, which removes the duplicated expense and the 23,483.62 of AP overstatement. The correction balances: debits 23,483.62 and credits 23,483.62.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01BNwQraP8LZQ8CanBBLsnsA",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}
