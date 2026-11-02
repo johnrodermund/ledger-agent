@@ -325,6 +325,28 @@ def test_results_show_refusals(tmp_path, fake_clients):
     assert "| Refusals | 1 |" in (out / "results.md").read_text(encoding="utf-8")
 
 
+def test_runner_writes_a_report_and_trace_for_each_scenario(tmp_path, fake_clients):
+    scripts, _ = fake_clients
+    scripts["dev-1"] = script_for(BY_ID["dev-1"])
+    scripts["injection-1"] = script_for(BY_ID["injection-1"])
+    code, out = invoke(tmp_path, "--split", "injection")
+    assert code == 0
+    for scenario in ("dev-1", "injection-1"):
+        for name in ("report.md", "report.json", "trace.json"):
+            assert (out / scenario / name).is_file(), (scenario, name)
+    assert json.loads((out / "dev-1" / "trace.json").read_text(encoding="utf-8"))[0]["node"] == "explore"
+
+
+def test_an_abort_removes_old_scenario_reports(tmp_path, fake_clients):
+    scripts, _ = fake_clients
+    scripts["dev-2"] = script_for(BY_ID["dev-2"])
+    code, out = invoke(tmp_path, "--scenario", "dev-2")
+    assert code == 0 and (out / "dev-2" / "report.md").exists()
+    scripts["dev-2"] = []
+    code, _ = invoke(tmp_path, "--scenario", "dev-2")
+    assert code != 0 and not (out / "dev-2").exists()
+
+
 def test_each_scenario_gets_a_fresh_client(tmp_path, fake_clients):
     scripts, built = fake_clients
     for spec in split("holdout"):

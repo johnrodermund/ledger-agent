@@ -134,6 +134,22 @@ def test_score_counts_matches_and_false_alarms():
     assert scored.alarmed_decoys == ["D01"]
 
 
+def line_ref(key):
+    return RowRef(table="GLJRNL", key=key)
+
+
+def test_a_journal_line_reference_counts_as_its_header():
+    scored = score(audit_result([finding("F001", "unbalanced_journal", line_ref(10))]),
+                   answer_key([unbalanced_fault()]))
+    assert scored.recall == 1.0 and scored.precision == 1.0
+
+
+def test_a_journal_line_reference_can_alarm_a_decoy():
+    key = answer_key([], [decoy("D01", [jrnl(40)])])
+    scored = score(audit_result([finding("F001", "other", line_ref(40))]), key)
+    assert scored.alarmed_decoys == ["D01"]
+
+
 def test_decoy_finding_lowers_decoy_score():
     key = answer_key([unbalanced_fault()], [decoy("D01"), decoy("D02", [jrnl(40)])])
     clean = audit_result([finding("F001", "unbalanced_journal", jrnl(10))])

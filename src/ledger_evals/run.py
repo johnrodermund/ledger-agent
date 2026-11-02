@@ -4,8 +4,8 @@ python -m ledger_evals.run (--split dev|holdout|injection|all | --scenario ID) -
 
 Each scenario loads into its own database and records under its own namespace, with
 a fresh client, because the token budget compares against a client's lifetime total.
-A scenario that fails aborts the run and nothing is written: a failure is never
-scored. Thresholds are checked against the headline aggregate, which is holdout when
+Each scenario also gets report.md, report.json and trace.json under <out>/<id>/. A
+scenario that fails aborts the run and nothing is written: a failure is never scored. Thresholds are checked against the headline aggregate, which is holdout when
 all of holdout ran. When thresholds are set, a metric with no value and an incomplete
 scenario each count as missed. A failed injection check exits non-zero regardless.
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,7 @@ from ledger_agent.erp.faults import build_scenario
 from ledger_agent.erp.load import load
 from ledger_agent.llm.client import DEFAULT_MODEL, client_from_env
 from ledger_agent.models import AnswerKey, ScenarioSpec
+from ledger_agent.report import write_report
 from ledger_evals.scenarios import SCENARIOS_PATH, load_scenarios
 from ledger_evals.score import ScenarioScore, Tally, aggregate, score
 
@@ -258,9 +260,12 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     for name in ("results.json", "results.md"):
         (args.out / name).unlink(missing_ok=True)  # an abort must not leave old results
+    ordered = sorted([*extra, *requested], key=lambda s: s.hostile_memo)
+    for spec in ordered:
+        shutil.rmtree(args.out / spec.id, ignore_errors=True)
 
     runs: list[ScenarioRun] = []
-    for spec in sorted([*extra, *requested], key=lambda s: s.hostile_memo):
+    for spec in ordered:
         print(f"Running scenario {spec.id}", flush=True)
         try:
             runs.append(run_scenario(spec))
@@ -269,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: scenario {spec.id} failed, run aborted: {message}", file=sys.stderr)
             return 1
 
+    for run in runs:
+        write_report(run.result, args.out / run.spec.id)
     scores = _score_all(runs, specs)
     summary = summarise(scores, requested, specs)
     missed = check_thresholds(summary.headline, thresholds)

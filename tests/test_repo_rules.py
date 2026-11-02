@@ -67,6 +67,24 @@ def test_readme_discloses_that_the_type_names_are_given_to_the_model():
     assert "five" in limitations and "type names" in limitations
 
 
+def test_readme_says_holdout_is_looked_at_once_with_prompts_frozen():
+    text = " ".join(_readme().lower().split())
+    assert "looked at once" in text and "prompts frozen" in text
+
+
+def test_readme_discloses_the_planted_fault_count():
+    from ledger_evals.scenarios import load_scenarios
+
+    holdout = [s for s in load_scenarios() if s.split == "holdout"]
+    planted = sum(sum(s.faults.values()) for s in holdout)
+    assert f"{planted} planted faults" in _readme()
+
+
+def test_readme_token_limit_describes_stage_budgets():
+    text = " ".join(_readme().lower().split())
+    assert "30%" in text and "50%" in text and "20%" in text
+
+
 def test_readme_hundred_percent_applies_only_to_guardrails():
     for line in _readme().splitlines():
         if "100%" in line:
@@ -110,6 +128,25 @@ def test_live_evals_workflow():
     assert "timeout-minutes" in text
     assert "upload-artifact" in text and "recordings" in text
     assert "git commit" not in text and "git push" not in text
+
+
+def test_live_evals_skips_a_scheduled_run_without_the_secret():
+    job = _workflow("live-evals.yml")["jobs"]["evals"]
+    check = next(s for s in job["steps"] if s.get("id") == "key")
+    assert "secrets.ANTHROPIC_API_KEY != ''" in check["env"]["HAS_KEY"]
+    assert "GITHUB_EVENT_NAME" in check["run"] and "schedule" in check["run"]
+    assert "GITHUB_OUTPUT" in check["run"] and "exit 1" not in check["run"]
+    run = next(s for s in job["steps"] if "ANTHROPIC_API_KEY" in s.get("env", {}))
+    assert run["if"] == "steps.key.outputs.run == 'true'"
+
+
+def test_live_evals_record_mode_does_not_run_the_agent_service():
+    job = _workflow("live-evals.yml")["jobs"]["evals"]
+    run = next(s for s in job["steps"] if "ANTHROPIC_API_KEY" in s.get("env", {}))["run"]
+    assert '"$LEDGER_LLM_MODE" = "record"' in run
+    record = run.split('"$LEDGER_LLM_MODE" = "record"')[1].split("else")[0]
+    assert "docker compose run --rm --no-deps evals" in record
+    assert "docker compose up -d --wait db" in record
 
 
 def test_live_evals_scopes_the_key_to_the_eval_step_and_checks_it():

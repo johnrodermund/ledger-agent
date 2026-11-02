@@ -140,14 +140,21 @@ def fix_is_valid(correction: Correction, fault: PlantedFault) -> bool:
     return changes == set(fault.expected_status.items())
 
 
+def _rows(finding: Finding) -> set[RowRef]:
+    """The finding's rows, with a journal line standing for its header: GLJRNL rows are
+    cited by the same JRNL_NO."""
+    return {RowRef(table="GLJRNH", key=r.key) if r.table == "GLJRNL" else r
+            for r in finding.affected_rows}
+
+
 def _matches(finding: Finding, fault: PlantedFault) -> bool:
     """Same type and at least one shared row. Type other equals no fault type."""
-    return fault.type == finding.type and bool(set(fault.rows) & set(finding.affected_rows))
+    return fault.type == finding.type and bool(set(fault.rows) & _rows(finding))
 
 
 def _decoy_rows(finding: Finding, payment_invoices: Mapping[int, int]) -> set[RowRef]:
     """The finding's rows, with each payment row also standing for its invoice."""
-    rows = set(finding.affected_rows)
+    rows = _rows(finding)
     for row in finding.affected_rows:
         if row.table == "APPAYM" and row.key in payment_invoices:
             rows.add(RowRef(table="APINVH", key=payment_invoices[row.key]))
