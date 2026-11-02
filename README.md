@@ -43,6 +43,8 @@ docker compose up --build --abort-on-container-exit --exit-code-from evals
 
 This needs Docker and no API key. Every setting has a test default in `docker-compose.yml`, so no `.env` is required. To change a value, run `cp .env.example .env` and edit it. The role passwords are also fixed in `db/init/01_roles.sql`, so change both together.
 
+The default run replays committed recordings in `recordings/`. They are pending, so until they are committed this command stops at `agent` with a missing-recording error. This note goes away once they are.
+
 Services start in this order:
 
 1. `db` starts Postgres and becomes healthy.

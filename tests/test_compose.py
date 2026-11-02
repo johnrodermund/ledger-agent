@@ -67,3 +67,16 @@ def test_only_admin_services_get_the_admin_password():
     for name in ("seed", "evals"):
         assert "POSTGRES_PASSWORD" in _service(name)["environment"]
     assert "POSTGRES_PASSWORD" not in _service("agent")["environment"]
+
+
+def test_one_shot_services_idle_and_report_health_from_a_fresh_marker():
+    for name in ("seed", "agent"):
+        service = _service(name)
+        command = service["command"][-1]
+        assert command.startswith("rm -f /tmp/done && ")
+        assert command.endswith("&& touch /tmp/done && exec sleep infinity")
+        assert "/tmp" in service["tmpfs"]  # a restart cannot keep the old marker
+        health = service["healthcheck"]
+        assert health["test"][1] == "test -f /tmp/done"
+        interval = int(health["interval"].rstrip("s"))
+        assert interval * health["retries"] >= 45 * 60  # live workflow timeout-minutes

@@ -24,13 +24,19 @@ jobs:
     timeout-minutes: 45
     env:
       LEDGER_LLM_MODE: ${{ inputs.mode || 'live' }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Create .env from the test values
         run: cp .env.example .env
       - name: Run the evals
-        run: docker compose up --build --abort-on-container-exit --exit-code-from evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::The ANTHROPIC_API_KEY secret is empty. Add it under repository secrets before running live or record mode."
+            exit 1
+          fi
+          docker compose up --build --abort-on-container-exit --exit-code-from evals
       - name: Show service logs on failure
         if: failure()
         run: docker compose logs --no-color

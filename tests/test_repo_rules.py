@@ -105,3 +105,17 @@ def test_live_evals_workflow():
     assert "timeout-minutes" in text
     assert "upload-artifact" in text and "recordings" in text
     assert "git commit" not in text and "git push" not in text
+
+
+def test_live_evals_scopes_the_key_to_the_eval_step_and_checks_it():
+    wf = _workflow("live-evals.yml")
+    job = wf["jobs"]["evals"]
+    assert "ANTHROPIC_API_KEY" not in job.get("env", {})
+    holders = [s for s in job["steps"] if "ANTHROPIC_API_KEY" in s.get("env", {})]
+    assert len(holders) == 1
+    run = holders[0]["run"]
+    assert run.index('-z "$ANTHROPIC_API_KEY"') < run.index("docker compose up")
+
+
+def test_readme_says_the_default_run_needs_recordings():
+    assert "recordings" in _readme().split("Services start in this order")[0].lower()
