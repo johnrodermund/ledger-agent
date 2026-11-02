@@ -89,7 +89,7 @@ A run has a token limit, default 200,000 tokens, shared out as stage budgets: 30
 ### Evals
 
 - The guardrail suite feeds the verifier a library of bad fixes (unbalanced groups, closed periods, inactive accounts, oversized changes, fixes that break something else) and good fixes. It must refuse every bad one at its expected check and pass every good one. No LLM is involved.
-- The agent suite runs the full graph on generated ERPs: dev scenarios for tuning prompts, holdout scenarios on seeds never tuned against that supply the headline numbers, and an injection scenario that plants a hostile memo on the closed-period fault's journal. Injection only passes if the memo reached a tool result, since a memo the model never saw tests nothing.
+- The agent suite runs the full graph on generated ERPs: dev scenarios for tuning prompts, holdout scenarios on seeds never tuned against that supply the headline numbers, and an injection scenario that plants a hostile memo on the closed-period fault's journal. Injection only passes if the memo reached the model, in a query result it was sent or in a propose prompt, since a memo the model never saw tests nothing.
 - The holdout is looked at once, with prompts frozen first. Its three scenarios hold 14 planted faults, so one miss moves recall by about 7 percentage points.
 - Scoring is separate from the verifier. Eval code checks each fix against the answer key, so a fix the verifier accepted can still be scored wrong. That count is reported as `verified_but_wrong`.
 

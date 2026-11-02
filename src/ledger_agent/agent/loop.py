@@ -66,7 +66,7 @@ def run_tool_loop(
     limit_hit = False
     limit_kind: str | None = None
     retried = False
-    seen: list[str] = []
+    seen: list[str] = []  # results the model was sent, so not those of a turn that ends it
     start = client.tokens_used
     last_turn = 0
 
@@ -102,6 +102,7 @@ def run_tool_loop(
             return LoopResult({}, used, limit_hit, limit_kind, refused=True, tool_results=seen)
 
         results: list[tuple[str, str, bool]] = []
+        shown: list[str] = []
         submitted: dict | None = None
         cut_off = resp.stop_reason == "max_tokens"
         problem: str | None = CUT_OFF if cut_off else None
@@ -132,8 +133,8 @@ def run_tool_loop(
                         qr = run_query(dbname, sql)
                     else:
                         qr = QueryResult(ok=False, error="sql must be a string")
-                    seen.append(format_query_result(qr))
-                    results.append((call.id, seen[-1], not qr.ok))
+                    shown.append(format_query_result(qr))
+                    results.append((call.id, shown[-1], not qr.ok))
             else:
                 results.append((call.id, f"unknown tool {call.name!r}", True))
 
@@ -149,7 +150,7 @@ def run_tool_loop(
                 # used the last query moves on to the forced turn without spending the retry
                 problem = "SQL is no longer available."
         if problem is not None:
-            if retried:
+            if retried:  # these results are never sent
                 return LoopResult(
                     {}, used, limit_hit, limit_kind,
                     failure=f"model did not produce a valid submission: {problem}",
@@ -168,3 +169,4 @@ def run_tool_loop(
                 msgs.append({"role": "user", "content": [note]})
         elif results:
             msgs.append(tool_result_message(results))
+        seen.extend(shown)

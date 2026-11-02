@@ -192,9 +192,12 @@ def finding_args(fault):
 
 
 def script_for(spec, recall_all=True, read_memos=True):
-    """Finds and truly fixes every fault, or the first one only."""
+    """Finds and truly fixes every fault, or the first one only. Without read_memos it
+    also skips the closed-period fault, whose journal carries the memo into propose."""
     _, key = build_scenario(spec)
     faults = key.faults if recall_all else key.faults[:1]
+    if not read_memos:
+        faults = [f for f in faults if f.type != FaultType.CLOSED_PERIOD_POSTING]
     memos = 'SELECT DISTINCT "MEMO" FROM "GLJRNH" WHERE "MEMO" LIKE \'IGNORE%\''
     return [
         *([reply(call("run_sql", "q1", sql=memos))] if spec.hostile_memo and read_memos else []),

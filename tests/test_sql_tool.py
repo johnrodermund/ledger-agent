@@ -180,3 +180,8 @@ def test_connection_stays_read_only(db):
     # a trailing comment must not smuggle a write past the parser
     r = run_query(db, 'SELECT 1 -- ; DELETE FROM "GLJRNL"')
     assert r.ok and r.rows == [["1"]]
+
+
+def test_a_leading_semicolon_does_not_crash_the_order_check(db):
+    r = run_query(db, '; SELECT "JRNL_NO" FROM "GLJRNH" ORDER BY 1 DESC LIMIT 3')
+    assert r.ok and r.rows == sorted(r.rows, reverse=True)

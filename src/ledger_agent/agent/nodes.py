@@ -364,11 +364,14 @@ def propose(state: AgentState, deps: Deps) -> dict[str, Any]:
     if deps.client.tokens_used >= stop_at:
         return _stop_for_tokens(state)
     malformed: list[dict[str, Any]] = []
+    prompt = _propose_prompt(state, finding)
+    # The first request always goes out, and the prompt carries query results.
+    shown = {"tool_results": [*state["tool_results"], prompt]}
     try:
         correction, problem = _request_correction(
-            deps.client, PROPOSE_SYSTEM, _propose_prompt(state, finding), stop_at, malformed)
+            deps.client, PROPOSE_SYSTEM, prompt, stop_at, malformed)
     except _TokenLimit:
-        return _stop_for_tokens(state) | {"malformed": [*state["malformed"], *malformed]}
+        return _stop_for_tokens(state) | {"malformed": [*state["malformed"], *malformed]} | shown
     except _Refused:
         hit = list(state["limits_hit"])
         if "propose_refused" not in hit:
@@ -376,8 +379,8 @@ def propose(state: AgentState, deps: Deps) -> dict[str, Any]:
         return _end_finding(state, Outcome(
             finding_id=finding.finding_id, status="refused", attempts=state["attempt"],
             reason="the model refused to propose a correction")) | {
-                "malformed": [*state["malformed"], *malformed], "limits_hit": hit}
-    kept = {"malformed": [*state["malformed"], *malformed]}
+                "malformed": [*state["malformed"], *malformed], "limits_hit": hit} | shown
+    kept = {"malformed": [*state["malformed"], *malformed]} | shown
     if correction is None:
         return _end_finding(state, Outcome(
             finding_id=finding.finding_id, status="needs_human", attempts=state["attempt"],

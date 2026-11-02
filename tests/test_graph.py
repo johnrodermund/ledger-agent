@@ -473,3 +473,9 @@ def test_run_query_raises_when_database_unreachable(db, monkeypatch):
     monkeypatch.setenv("LEDGER_DB_PORT", "1")
     with pytest.raises(DatabaseUnavailable):
         run_query(db, "SELECT 1")
+
+
+def test_the_propose_prompt_counts_as_shown_to_the_model(db, fault, tmp_path):
+    result, provider = run(db, tmp_path, [
+        *discovery(finding_item(fault)), propose_reply(true_args(fault))])
+    assert provider.requests[-1].messages[0]["content"] in result.state["tool_results"]

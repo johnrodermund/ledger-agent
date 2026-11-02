@@ -474,3 +474,9 @@ def test_confirm_appends_to_existing_dropped(db, tmp_path):
         Deps(client, Limits()),
     )
     assert [d.finding_id for d in out["dropped"]] == ["F009", "F001"]
+
+
+def test_a_query_run_in_the_submitting_turn_is_not_counted_as_seen(db, tmp_path):
+    client, _ = make_client(tmp_path, [reply(sql_call(GOOD_SQL), notes_call())])
+    result = loop(client, db)
+    assert result.submitted == {"notes": "notes"} and result.tool_results == []

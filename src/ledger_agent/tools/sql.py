@@ -124,7 +124,8 @@ def validate(sql: str) -> str | None:
 
 def _is_ordered(sql: str) -> bool:
     """Whether a validated statement has an ORDER BY at the top level."""
-    return sqlglot.parse_one(sql, read="postgres").args.get("order") is not None
+    statement = next(s for s in sqlglot.parse(sql, read="postgres") if s is not None)
+    return statement.args.get("order") is not None
 
 
 def _render(value) -> str:
