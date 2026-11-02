@@ -267,15 +267,26 @@ def test_one_holdout_scenario_is_not_labelled_the_holdout_aggregate(tmp_path, fa
 def test_incomplete_scenarios_reach_the_headline_and_miss_thresholds(tmp_path, fake_clients):
     scripts, _ = fake_clients
     script = script_for(BY_ID["dev-2"])
-    good = script[1].tool_calls[0].arguments["findings"]
-    script[1].tool_calls[0].arguments["findings"] = [
-        *good, {"type": "other", "summary": "x", "affected_rows": [], "evidence_sql": "SELEC"}]
+    script[1].input_tokens = 200_000  # spends the budget, so no fix is proposed
     scripts["dev-2"] = script
     code, out = invoke(tmp_path, "--scenario", "dev-2",
                        thresholds=thresholds_file(tmp_path, {"recall": 0.5}))
     assert code != 0
     assert read_results(out)["headline"]["incomplete_scenarios"] == 1
     assert "incomplete" in (out / "results.md").read_text(encoding="utf-8")
+
+
+def test_a_dropped_finding_does_not_miss_thresholds(tmp_path, fake_clients):
+    scripts, _ = fake_clients
+    script = script_for(BY_ID["dev-2"])
+    good = script[1].tool_calls[0].arguments["findings"]
+    script[1].tool_calls[0].arguments["findings"] = [
+        *good, {"type": "other", "summary": "x", "affected_rows": [], "evidence_sql": "SELEC"}]
+    scripts["dev-2"] = script
+    code, out = invoke(tmp_path, "--scenario", "dev-2",
+                       thresholds=thresholds_file(tmp_path, {"recall": 0.5}))
+    assert code == 0
+    assert read_results(out)["headline"]["incomplete_scenarios"] == 0
 
 
 def test_results_show_misses_and_label_a_non_holdout_run(tmp_path, fake_clients):

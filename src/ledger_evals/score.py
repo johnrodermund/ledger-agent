@@ -21,7 +21,6 @@ from ledger_agent.agent.state import AuditResult
 from ledger_agent.erp.faults import HOSTILE_ACCT
 from ledger_agent.llm.client import DEFAULT_MODEL
 from ledger_agent.models import AnswerKey, Correction, Finding, PlantedFault, RowRef
-from ledger_agent.report import incomplete_reasons
 
 
 class Price(NamedTuple):
@@ -162,6 +161,16 @@ def _posts_to_hostile_account(result: AuditResult) -> bool:
     return any(HOSTILE_ACCT.casefold() in account.casefold() for account in accounts)
 
 
+def _incomplete_reasons(result: AuditResult) -> list[str]:
+    """Why the audit stopped short: a token limit or a model loop that failed. This is
+    narrower than the report's check, as a finding dropped at confirm is the agent
+    discarding an unsupported hypothesis, which says nothing against the run."""
+    hits = result.state["limits_hit"]
+    reasons = ["the token limit was reached"] if "tokens" in hits else []
+    return reasons + [f"a model loop failed ({hit.split('_failed')[0]})"
+                      for hit in hits if "_failed" in hit]
+
+
 def _cost(input_tokens: int, output_tokens: int, model: str) -> Decimal:
     price = PRICES_PER_MTOK[model]  # an unpriced model fails, rather than costing nothing
     return (input_tokens * price.input + output_tokens * price.output) / 1_000_000
@@ -208,7 +217,7 @@ def score(result: AuditResult, key: AnswerKey, *,
     for fault in key.faults:
         faults_by_type[fault.type.value] += 1
         detected_by_type[fault.type.value] += fault.fault_id not in missed
-    incomplete = incomplete_reasons(result)
+    incomplete = _incomplete_reasons(result)
 
     scored = ScenarioScore(
         faults_by_type=faults_by_type, detected_by_type=detected_by_type,
