@@ -1,0 +1,43 @@
+{
+  "key": "d5f8e126eab91171fea37045af05cb3abf160209a548377c78091dbc9bc391ff",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-3",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 5033,
+    "output_tokens": 620,
+    "stop_reason": "tool_use",
+    "text": "I need to correct journal 2215, where both the expense debit (5100) and the AP credit (2000) are 13352.11 while the invoice amount is 13307.11. The true amount is 13307.11, so I'll post a correcting journal that reverses 45.00 from each side: a credit to 5100 of 45.00 and a debit to 2000 of 45.00. This keeps the correction balanced and small. Period 11 is open, so I'll use it. No invoice status changes, since this is not a duplicate finding.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2215,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 45.0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5100",
+              "cr_amt": 45.0,
+              "dr_amt": 0,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Finding F003: Journal 2215 records invoice 742 (INV_AMT 13307.11) but posted both the 5100 expense debit and the 2000 AP credit at 13352.11, overstating both by 45.00. The invoice header is the source document, so the true amount is 13307.11. The correction is a new journal referencing 2215 that debits 2000 and credits 5100 by 45.00 each, leaving the original journal unedited. The net effect brings AP control and expense to 13307.11 for invoice 742 and closes the 45.00 gap between invoice totals and AP control credits. Posted to open period 11, using only active accounts 2000 and 5100. No invoice status change, since this is not a duplicate invoice.",
+          "status_changes": []
+        },
+        "id": "toolu_017FbpvakB8UqjW7XmcpJTk2",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

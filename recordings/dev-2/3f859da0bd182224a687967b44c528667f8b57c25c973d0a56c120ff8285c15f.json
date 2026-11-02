@@ -1,0 +1,35 @@
+{
+  "key": "3f859da0bd182224a687967b44c528667f8b57c25c973d0a56c120ff8285c15f",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "dev-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_findings"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 11029,
+    "output_tokens": 510,
+    "stop_reason": "tool_use",
+    "text": "The last query's output is the expected AP-side pattern (invoice expense line plus AP line split), so it isn't itself a finding; it was a broad probe. Two items need a closer look: the probable duplicate invoice (452 vs 801), and the invoice-to-journal amount tie-out, which I'll check at the header level by comparing the AP liability line to the invoice amount.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT \"INV_ID\", \"VEND_CD\", \"INV_NO\", \"INV_DT\", \"INV_AMT\", \"STAT_CD\", \"JRNL_NO\" FROM \"APINVH\" WHERE \"INV_ID\" IN (452, 801)"
+        },
+        "id": "toolu_01WTRi4pmdjj17YKx2RmPVSd",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT i.\"INV_ID\", i.\"INV_AMT\", j.\"ACCT_CD\", j.\"CR_AMT\", j.\"DR_AMT\" FROM \"APINVH\" i JOIN \"GLJRNL\" j ON j.\"JRNL_NO\"=i.\"JRNL_NO\" WHERE TRIM(j.\"ACCT_CD\") IN (SELECT TRIM(\"ACCT_CD\") FROM \"GLCOA\" WHERE \"ACCT_TYP\"='LIABILITY') AND ABS(j.\"CR_AMT\"-i.\"INV_AMT\")>0.005 ORDER BY i.\"INV_ID\""
+        },
+        "id": "toolu_017DgnR92YbDkJiJydp5ZpCW",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "key": "9119d4825fedc8093e0d22cc6ac6d05da1584539c97377a078c29c9fe8fcfab6",
+  "metadata": {
+    "message_count": 3,
+    "namespace": "holdout-3",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 1331,
+    "output_tokens": 153,
+    "stop_reason": "tool_use",
+    "text": "This isn't SQLite. I'll try the PostgreSQL information schema.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position;"
+        },
+        "id": "toolu_01MTVTMwjNhSrkEnPJZdoAV3",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

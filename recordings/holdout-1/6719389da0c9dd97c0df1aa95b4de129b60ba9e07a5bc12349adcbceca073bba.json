@@ -1,0 +1,35 @@
+{
+  "key": "6719389da0c9dd97c0df1aa95b4de129b60ba9e07a5bc12349adcbceca073bba",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "holdout-1",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 6083,
+    "output_tokens": 1262,
+    "stop_reason": "tool_use",
+    "text": "The dictionary says APINVH has a V (void) status, but none appear in the data. Next I'll check the amount sign conventions, whether the journals balance, and whether the AP invoice totals match the payments and journal lines.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT 'jrnl_balance' AS chk, COUNT(*) AS n, SUM(\"DR_AMT\") AS dr, SUM(\"CR_AMT\") AS cr, SUM(\"DR_AMT\")-SUM(\"CR_AMT\") AS diff FROM \"GLJRNL\" UNION ALL SELECT 'lines_both_or_neither', COUNT(*), NULL, NULL, NULL FROM \"GLJRNL\" WHERE (\"DR_AMT\" IS NOT NULL AND \"DR_AMT\"<>0 AND \"CR_AMT\" IS NOT NULL AND \"CR_AMT\"<>0) OR (COALESCE(\"DR_AMT\",0)=0 AND COALESCE(\"CR_AMT\",0)=0) UNION ALL SELECT 'neg_amounts', COUNT(*), NULL, NULL, NULL FROM \"GLJRNL\" WHERE \"DR_AMT\"<0 OR \"CR_AMT\"<0 UNION ALL SELECT 'orphan_jrnl_lines', COUNT(*), NULL, NULL, NULL FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=l.\"JRNL_NO\") UNION ALL SELECT 'lines_bad_acct', COUNT(*), NULL, NULL, NULL FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLCOA\" a WHERE TRIM(a.\"ACCT_CD\")=TRIM(l.\"ACCT_CD\")) UNION ALL SELECT 'inv_bad_vend', COUNT(*), NULL, NULL, NULL FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"APVEND\" v WHERE TRIM(v.\"VEND_CD\")=TRIM(i.\"VEND_CD\")) UNION ALL SELECT 'inv_jrnl_missing', COUNT(*), NULL, NULL, NULL FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=i.\"JRNL_NO\") UNION ALL SELECT 'pay_bad_inv', COUNT(*), NULL, NULL, NULL FROM \"APPAYM\" p WHERE NOT EXISTS (SELECT 1 FROM \"APINVH\" i WHERE i.\"INV_ID\"=p.\"INV_ID\");"
+        },
+        "id": "toolu_01SbJpsrhfgR3wAJwKyx6LWx",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT i.\"INV_ID\", i.\"STAT_CD\", i.\"INV_AMT\", COALESCE(SUM(p.\"PAY_AMT\"),0) AS paid, COUNT(p.\"PAY_ID\") AS npay, i.\"INV_DT\", i.\"JRNL_NO\" FROM \"APINVH\" i LEFT JOIN \"APPAYM\" p ON p.\"INV_ID\"=i.\"INV_ID\" GROUP BY i.\"INV_ID\", i.\"STAT_CD\", i.\"INV_AMT\", i.\"INV_DT\", i.\"JRNL_NO\" ORDER BY i.\"INV_ID\" LIMIT 15;"
+        },
+        "id": "toolu_01UCGYTY4yjVhabfvpNeFEFV",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

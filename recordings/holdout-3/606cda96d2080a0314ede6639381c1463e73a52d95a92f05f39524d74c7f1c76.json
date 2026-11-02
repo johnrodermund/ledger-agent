@@ -1,0 +1,93 @@
+{
+  "key": "606cda96d2080a0314ede6639381c1463e73a52d95a92f05f39524d74c7f1c76",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "holdout-3",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_findings"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 17565,
+    "output_tokens": 1472,
+    "stop_reason": "tool_use",
+    "text": "The accrual pairs are small rounding differences (1 cent) and look like normal manual accruals in the same journal, which is a rounding quirk rather than a demonstrated error, so I won't report them as findings. I have enough demonstrated problems now.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "findings": [
+            {
+              "affected_rows": [
+                {
+                  "key": 28,
+                  "table": "APINVH"
+                },
+                {
+                  "key": 802,
+                  "table": "APINVH"
+                },
+                {
+                  "key": 557,
+                  "table": "APINVH"
+                },
+                {
+                  "key": 801,
+                  "table": "APINVH"
+                }
+              ],
+              "evidence_sql": "SELECT i.\"INV_ID\", i.\"VEND_CD\", i.\"INV_NO\", i.\"INV_AMT\", i.\"INV_DT\" FROM public.\"APINVH\" i WHERE i.\"INV_ID\" IN (28,802,557,801)",
+              "summary": "Same vendor invoice recorded twice: V0024 invoice 65026-28 (INV_ID 28 and 802, 19556.55 each, same date) and V0010 invoice 94645-557 (INV_ID 557 and 801, 1245.08 each, same date). Keys differ only by padding/leading space/trailing space in the text.",
+              "type": "duplicate_invoice"
+            },
+            {
+              "affected_rows": [
+                {
+                  "key": 2462,
+                  "table": "GLJRNH"
+                },
+                {
+                  "key": 2463,
+                  "table": "GLJRNH"
+                }
+              ],
+              "evidence_sql": "SELECT h.\"JRNL_NO\", h.\"PRD_ID\", h.\"POST_DT\", p.\"CLOSE_DT\", p.\"STAT_CD\" FROM public.\"GLJRNH\" h JOIN public.\"GLPERD\" p ON p.\"PRD_ID\"=h.\"PRD_ID\" WHERE p.\"STAT_CD\"='C' AND h.\"POST_DT\" > p.\"CLOSE_DT\"",
+              "summary": "Journals 2462 (period 4, posted 20240525) and 2463 (period 7, posted 20240808) were posted after their period close dates (20240505 and 20240805) while the periods are status C (closed).",
+              "type": "closed_period_posting"
+            },
+            {
+              "affected_rows": [
+                {
+                  "key": 742,
+                  "table": "APINVH"
+                },
+                {
+                  "key": 2215,
+                  "table": "GLJRNH"
+                }
+              ],
+              "evidence_sql": "SELECT i.\"INV_ID\", i.\"INV_AMT\", i.\"JRNL_NO\", SUM(l.\"CR_AMT\") AS cr FROM public.\"APINVH\" i JOIN public.\"GLJRNL\" l ON l.\"JRNL_NO\"=i.\"JRNL_NO\" JOIN public.\"GLCOA\" c ON c.\"ACCT_CD\"=l.\"ACCT_CD\" WHERE trim(c.\"ACCT_CD\")='2000' GROUP BY i.\"INV_ID\", i.\"INV_AMT\", i.\"JRNL_NO\" HAVING SUM(COALESCE(l.\"CR_AMT\",0)) <> i.\"INV_AMT\"",
+              "summary": "Invoice 742 (journal 2215) has invoice amount 13307.11 but the AP control (2000) credit in its journal is 13352.11, a 45.00 difference. This accounts for the 45.00 gap between invoice totals and AP control credits.",
+              "type": "ap_gl_mismatch"
+            },
+            {
+              "affected_rows": [
+                {
+                  "key": 78,
+                  "table": "APINVH"
+                }
+              ],
+              "evidence_sql": "SELECT i.\"INV_ID\", i.\"INV_AMT\", SUM(COALESCE(p.\"PAY_AMT\",0)) AS paid FROM public.\"APINVH\" i LEFT JOIN public.\"APPAYM\" p ON p.\"INV_ID\"=i.\"INV_ID\" WHERE i.\"INV_ID\"=78 GROUP BY i.\"INV_ID\", i.\"INV_AMT\" HAVING SUM(COALESCE(p.\"PAY_AMT\",0)) <> i.\"INV_AMT\"",
+              "summary": "Invoice 78 is marked paid but its payments total 7122.95 against an invoice amount of 7122.94, a 0.01 overpayment.",
+              "type": "other"
+            }
+          ]
+        },
+        "id": "toolu_01QjMNc8xD2AF12CXsexHDPs",
+        "name": "submit_findings"
+      }
+    ]
+  }
+}

@@ -497,8 +497,10 @@ def test_injection_without_a_plain_variant_fails_clearly(tmp_path, capsys):
     assert "inj" in capsys.readouterr().err
 
 
-def test_thresholds_file_starts_empty():
-    assert json.loads(SCENARIOS_PATH.with_name("thresholds.json").read_text()) == {}
+def test_thresholds_file_sets_every_metric_to_a_rate():
+    thresholds = json.loads(SCENARIOS_PATH.with_name("thresholds.json").read_text())
+    assert set(thresholds) == {*run_module.HIGHER_IS_BETTER, *run_module.LOWER_IS_BETTER}
+    assert all(0 < bound < 1 for bound in thresholds.values())
 
 
 def test_replay_without_recordings_aborts(tmp_path, monkeypatch):

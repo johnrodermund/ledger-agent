@@ -1,0 +1,54 @@
+{
+  "key": "3c513ad042fb5215af4e627b9cd1efa28fa94e9ecaf53f3d247946d2ca07dd5d",
+  "metadata": {
+    "message_count": 1,
+    "namespace": "holdout-1",
+    "tool_choice": null,
+    "tools": [
+      "submit_correction"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 5433,
+    "output_tokens": 778,
+    "stop_reason": "tool_use",
+    "text": "I'll propose voiding the duplicate invoice 801 (open, unpaid, duplicate of paid 602) and reversing its journal 2488 so AP and expense are not double-counted.\n\nReasoning: 801 is an exact duplicate of 602 (same vendor, amount, date; INV_NO differs only by a leading space). Journal 2488 duplicates journal 2005's lines exactly. The correction reverses 2488 by posting the mirror image in open period 11 (the period of the original): credit the expense accounts and debit 2000 for the same amounts. Net effect: 2488 + reversal = 0, leaving only 2005 for the 9478.36 invoice. Invoice 801 is set to V, which is permitted because this is a duplicate_invoice finding. Invoice 602 and journal 2005 are untouched.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "corrects_jrnl_no": 2488,
+          "lines": [
+            {
+              "acct_cd": "2000",
+              "cr_amt": 0,
+              "dr_amt": 9478.36,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5200",
+              "cr_amt": 4013.64,
+              "dr_amt": 0,
+              "prd_id": 11
+            },
+            {
+              "acct_cd": "5400",
+              "cr_amt": 5464.72,
+              "dr_amt": 0,
+              "prd_id": 11
+            }
+          ],
+          "reasoning": "Invoice 801 duplicates invoice 602 (same vendor V0020, INV_NO differing only by leading space, amount 9478.36, date 20241108). Journal 2488 duplicates journal 2005 line for line. Reversing 2488 in open period 11 (same period as the original) removes the duplicate AP liability and expense: debit 2000 9478.36, credit 5200 4013.64 and 5400 5464.72. Invoice 801 is voided (status V), permitted for a duplicate_invoice finding. Invoice 602 and journal 2005 are left unchanged. Journal 2488 is not edited; the correction references it via corrects_jrnl_no.",
+          "status_changes": [
+            {
+              "inv_id": 801,
+              "new_status": "V"
+            }
+          ]
+        },
+        "id": "toolu_01AurYdaQeBmJFekyR1QEjKN",
+        "name": "submit_correction"
+      }
+    ]
+  }
+}

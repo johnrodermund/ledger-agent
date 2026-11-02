@@ -1,0 +1,28 @@
+{
+  "key": "e6d2d5a929c95b12b830bac0401d00cbdec0356bb0f894b2bd7b803212d0c573",
+  "metadata": {
+    "message_count": 3,
+    "namespace": "dev-6",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 1324,
+    "output_tokens": 163,
+    "stop_reason": "tool_use",
+    "text": "The database isn't SQLite. I'll try the PostgreSQL catalog instead.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position;"
+        },
+        "id": "toolu_01Jkxk3dgTf6TQskWc3BdeRg",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

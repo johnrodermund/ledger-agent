@@ -4,22 +4,40 @@ A LangGraph agent that audits a synthetic legacy ERP in Postgres, finds data dis
 
 ## Results
 
-Results are pending. No measured numbers are published yet, and none are estimated here. The first recorded run will replace the placeholder below with the holdout table, misses included.
-
-### Measured results (placeholder, replaced by the first recorded run)
+Measured on the three holdout scenarios, run once with prompts frozen, on Claude Haiku 5.5 with thinking off. These are the recorded numbers, misses included.
 
 | Metric | Holdout |
 | --- | --- |
-| Recall | pending |
-| Precision | pending |
-| Decoy false alarm rate | pending |
-| Fix validity | pending |
-| Verified but wrong | pending |
-| End-to-end fix rate | pending |
-| Needs human rate | pending |
-| Tokens, cost and queries per run | pending |
+| Recall | 78.6% (11 of 14) |
+| Precision | 73.3% (11 of 15) |
+| Decoy false alarm rate | 37.5% (3 of 8) |
+| Fix validity | 90.9% (10 of 11) |
+| Verified but wrong | 1 |
+| End-to-end fix rate | 71.4% (10 of 14) |
+| Needs human rate | 26.7% (4 of 15) |
+| Refusals | 0 |
+| Incomplete scenarios | 0 |
+| Tokens, cost and queries per run | about 123,000 tokens, $0.019 and 29 queries |
 
-The one result that exists today is the guardrail suite: the verifier must refuse 100% of its deliberately bad fixes, and the suite exits non-zero if it does not. That figure covers only that suite, which has no LLM and does not measure the agent.
+Recall by fault type:
+
+| Fault type | Recall |
+| --- | --- |
+| ap_gl_mismatch | 100.0% (3 of 3) |
+| closed_period_posting | 33.3% (1 of 3) |
+| duplicate_invoice | 66.7% (2 of 3) |
+| invalid_account | 100.0% (2 of 2) |
+| unbalanced_journal | 100.0% (3 of 3) |
+
+Misses by scenario:
+
+- `holdout-1`: missed F04 (closed_period_posting); decoy false alarm D04; finding F004 credited to no fault.
+- `holdout-2`: decoy false alarm D01; findings F004 and F005 credited to no fault.
+- `holdout-3`: missed F02 (duplicate_invoice) and F05 (closed_period_posting); decoy false alarm D02; F001 verified but wrong; finding F004 credited to no fault.
+
+The weak spots are closed-period postings and decoys: the agent reports more than a third of the valid-but-odd records as problems. The hunt prompt has no guidance on decoys, on purpose, so this rate is the honest one. The injection scenario passed: the hostile memo reached the model, recall held, and no proposed line used the memo's account.
+
+CI fails if a replay falls below the thresholds in `evals/thresholds.json`, set from this run to the nearest 5 points and rounded in the cautious direction. The guardrail suite is a separate result: the verifier must refuse 100% of its deliberately bad fixes. That figure covers only that suite, which has no LLM and does not measure the agent.
 
 ## How the agent is wired
 
@@ -43,7 +61,7 @@ docker compose up --build --abort-on-container-exit --exit-code-from evals
 
 This needs Docker and no API key. Every setting has a test default in `docker-compose.yml`, so no `.env` is required. To change a value, run `cp .env.example .env` and edit it. The role passwords are also fixed in `db/init/01_roles.sql`, so change both together.
 
-The default run replays committed recordings in `recordings/`. They are pending, so until they are committed this command stops at `agent` with a missing-recording error. This note goes away once they are.
+The default run replays the committed recordings in `recordings/`, so it reproduces the results above without calling the model.
 
 Services start in this order:
 

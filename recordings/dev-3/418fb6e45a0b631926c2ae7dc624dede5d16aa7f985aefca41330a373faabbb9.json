@@ -1,0 +1,27 @@
+{
+  "key": "418fb6e45a0b631926c2ae7dc624dede5d16aa7f985aefca41330a373faabbb9",
+  "metadata": {
+    "message_count": 15,
+    "namespace": "dev-3",
+    "tool_choice": "submit_schema_notes",
+    "tools": [
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 10969,
+    "output_tokens": 1792,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "notes": "DATABASE: PostgreSQL-style (not SQLite). Table and column names are upper-case and must be double-quoted (e.g. \"APINVH\".\"INV_AMT\"). Tables and row counts: APINVH 802 (AP invoice header), APPAYM 503 (AP payments), APVEND 24 (vendor master), GLCOA 10 (chart of accounts), GLJRNH 1456 (GL journal header), GLJRNL 3458 (GL journal lines), GLPERD 12 (accounting periods), SYSDICT (data dictionary, 36 rows).\n\nCOLUMN TYPES: Dates are stored as integers in YYYYMMDD form (INV_DT, PAY_DT, POST_DT, STRT_DT, END_DT, CLOSE_DT); CLOSE_DT is NULL for open periods. Codes (STAT_CD, POST_FLG, SRC_CD, ACTV_FLG, ACCT_CD, VEND_CD) are CHARACTER (fixed width, space padded, e.g. VEND_CD 'V0015   ', ACCT_CD padded to 8). Amounts are NUMERIC (INV_AMT, PAY_AMT, DR_AMT, CR_AMT). Descriptive text fields are TEXT. Surrogate-style IDs are INTEGER (INV_ID, PAY_ID, JRNL_NO, PRD_ID, LN_SEQ, REF_JRNL_NO).\n\nRELATIONSHIPS (none declared as constraints; inferred and verified by joins):\n- APINVH.VEND_CD -> APVEND.VEND_CD (all invoices match a vendor).\n- APPAYM.INV_ID -> APINVH.INV_ID.\n- APINVH.JRNL_NO -> GLJRNH.JRNL_NO (every invoice has a journal; all 802 are SRC_CD='AP').\n- GLJRNL.JRNL_NO -> GLJRNH.JRNL_NO (no orphan lines).\n- GLJRNL.ACCT_CD -> GLCOA.ACCT_CD (one line fails to match, see anomalies).\n- GLJRNH.PRD_ID -> GLPERD.PRD_ID (all match).\n- REF_JRNL_NO in GLJRNH is NULL on all rows; apparently unused.\n\nCONVENTIONS / CODE VALUES (data-verified):\n- APINVH.STAT_CD: O open (299, no payments), P paid (503). No V (void) rows exist in the data even though the dictionary lists V.\n- APVEND.ACTV_FLG: Y only observed (24 rows).\n- GLCOA.ACCT_TYP: ASSET 2, LIABILITY 2, EXPENSE 6 (no equity/revenue types present). GLCOA.ACTV_FLG: Y 9, N 1.\n- GLJRNH.POST_FLG: P on all 1456 journals; no U (unposted) rows.\n- GLJRNH.SRC_CD: AP 1305 journals, GL 151 journals.\n- GLPERD.STAT_CD: C closed 10 (periods 1-10), O open 2 (periods 11-12). Each closed period's journal count equals its in-range count, except period 5 has one journal dated outside its START/END range.\n- Amounts: all GLJRNL lines are non-negative with one side populated; debit/credit is signed by column (DR_AMT vs CR_AMT), not by sign. Every journal balances (sum DR = sum CR).\n- Invoice amounts: fully paid invoices have PAY sum equal to INV_AMT, with one exception; no overpayments. Open invoices have zero payments.\n\nANOMALIES / DOCUMENTATION ISSUES:\n- SYSDICT says APINVH.STAT_CD includes V (void); no void invoices exist in the data.\n- SYSDICT says GLCOA.ACCT_TYP is ASSET/LIABILITY/EXPENSE only; this matches the data, but the chart is small (10 accounts), so the list may be incomplete.\n- Invoice INV_ID 63 (vendor V0015) has INV_AMT 7326.93 but payments summing to 7326.92 while STAT_CD='P' (1-cent shortfall, journal 1102).\n- One GLJRNL line references an ACCT_CD not present in GLCOA (not fully characterised; query was cut off before identifying it).\n- Period 5 contains one journal whose POST_DT falls outside the period's date range.\n- SYSDICT descriptions for dates say YYYYMMDD and match the stored integer format.\n- SYSDICT is a partial dictionary (covers only 4 of 8 tables' columns for GLJRNH/GLJRNL/AP tables appear covered; not verified exhaustively), so treat it as a starting point, not authoritative.\n\nNOT COMPLETED: The per-line account breakdown of AP vs GL journals (to confirm AP journal debit/credit account patterns) and identification of the orphan ACCT_CD were not finished because the query budget ran out. Treat those as open items for the auditor."
+        },
+        "id": "toolu_01UdKWHf2FXpjD2PiXZemqoh",
+        "name": "submit_schema_notes"
+      }
+    ]
+  }
+}

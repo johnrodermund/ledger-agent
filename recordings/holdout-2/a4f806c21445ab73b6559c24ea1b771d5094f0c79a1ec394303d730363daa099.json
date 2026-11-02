@@ -1,0 +1,42 @@
+{
+  "key": "a4f806c21445ab73b6559c24ea1b771d5094f0c79a1ec394303d730363daa099",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "holdout-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 6473,
+    "output_tokens": 1272,
+    "stop_reason": "tool_use",
+    "text": "The dictionary says APINVH has \"V void\" status, but no void rows appear. The dictionary also has no entries for the GLJRNH.REF_JRNL_NO or GLJRNL/APINVH relationships. Let me check the sign conventions, the dates, and whether the journal balances and invoice/payment reconciles.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT 'jrnl_balance' AS chk, COUNT(*) AS n, SUM(\"DR_AMT\") AS dr, SUM(\"CR_AMT\") AS cr, SUM(CASE WHEN \"DR_AMT\"<0 OR \"CR_AMT\"<0 THEN 1 ELSE 0 END) AS neg_lines, SUM(CASE WHEN \"DR_AMT\"<>0 AND \"CR_AMT\"<>0 THEN 1 ELSE 0 END) AS both_sides FROM \"GLJRNL\";"
+        },
+        "id": "toolu_014Q5pjyoQSad1xEy2FMrUDk",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'orphan_jrnl_lines' AS chk, COUNT(*) FROM \"GLJRNL\" l LEFT JOIN \"GLJRNH\" h ON h.\"JRNL_NO\"=l.\"JRNL_NO\" WHERE h.\"JRNL_NO\" IS NULL UNION ALL SELECT 'orphan_acct', COUNT(*) FROM \"GLJRNL\" l LEFT JOIN \"GLCOA\" c ON c.\"ACCT_CD\"=l.\"ACCT_CD\" WHERE c.\"ACCT_CD\" IS NULL UNION ALL SELECT 'orphan_inv_vend', COUNT(*) FROM \"APINVH\" i LEFT JOIN \"APVEND\" v ON v.\"VEND_CD\"=i.\"VEND_CD\" WHERE v.\"VEND_CD\" IS NULL UNION ALL SELECT 'orphan_pay_inv', COUNT(*) FROM \"APPAYM\" p LEFT JOIN \"APINVH\" i ON i.\"INV_ID\"=p.\"INV_ID\" WHERE i.\"INV_ID\" IS NULL UNION ALL SELECT 'orphan_inv_jrnl', COUNT(*) FROM \"APINVH\" i LEFT JOIN \"GLJRNH\" h ON h.\"JRNL_NO\"=i.\"JRNL_NO\" WHERE h.\"JRNL_NO\" IS NULL UNION ALL SELECT 'jrnh_bad_period', COUNT(*) FROM \"GLJRNH\" h LEFT JOIN \"GLPERD\" p ON p.\"PRD_ID\"=h.\"PRD_ID\" WHERE p.\"PRD_ID\" IS NULL;"
+        },
+        "id": "toolu_016S6FDLmQWPjFpC9kWcNMRB",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT i.\"STAT_CD\", COUNT(*) AS invs, SUM(i.\"INV_AMT\") AS inv_amt, COUNT(p.\"PAY_ID\") AS pays, SUM(p.\"PAY_AMT\") AS paid, SUM(CASE WHEN p.\"PAY_AMT\" IS NOT NULL AND ABS(p.\"PAY_AMT\") > i.\"INV_AMT\" THEN 1 ELSE 0 END) AS overpaid_rows, MIN(i.\"INV_DT\") AS min_dt, MAX(i.\"INV_DT\") AS max_dt FROM \"APINVH\" i LEFT JOIN \"APPAYM\" p ON p.\"INV_ID\"=i.\"INV_ID\" GROUP BY i.\"STAT_CD\";"
+        },
+        "id": "toolu_01R5hDDKaWJi4BampQe2g4ei",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

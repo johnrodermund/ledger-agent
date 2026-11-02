@@ -50,9 +50,10 @@ def test_readme_results_section_comes_first():
     assert first_title.startswith("# ")
 
 
-def test_readme_results_make_no_numeric_claims_until_recorded():
-    section = _readme().split("## Results", 1)[1].split("\n## ", 1)[0]
-    assert "pending" in section.lower()
+def test_readme_results_publish_the_recorded_holdout_with_misses():
+    section = _readme().split("## Results", 1)[1].split("\n## ", 1)[0].lower()
+    assert "pending" not in section
+    assert "holdout" in section and "misses" in section and "thresholds" in section
 
 
 def test_readme_limitations_are_disclosed():

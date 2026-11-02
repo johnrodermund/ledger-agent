@@ -1,0 +1,42 @@
+{
+  "key": "20a8c8ef7277eff8b80fef3b5ac32e5adb52f6682645363fb1aeec8d7d715cbe",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "holdout-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 3059,
+    "output_tokens": 909,
+    "stop_reason": "tool_use",
+    "text": "There's a SYSDICT table. I'll pull the dictionary alongside sample data and code-value distributions.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT TBL_NM, COL_NM, DESCR FROM SYSDICT ORDER BY TBL_NM, COL_NM;"
+        },
+        "id": "toolu_01QRD9YbiCPr4c98MZffwHke",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH.STAT_CD' AS col, STAT_CD AS v, COUNT(*) AS n FROM \"APINVH\" GROUP BY STAT_CD UNION ALL SELECT 'GLJRNH.POST_FLG', POST_FLG, COUNT(*) FROM \"GLJRNH\" GROUP BY POST_FLG UNION ALL SELECT 'GLJRNH.SRC_CD', SRC_CD, COUNT(*) FROM \"GLJRNH\" GROUP BY SRC_CD UNION ALL SELECT 'GLPERD.STAT_CD', STAT_CD, COUNT(*) FROM \"GLPERD\" GROUP BY STAT_CD UNION ALL SELECT 'GLCOA.ACCT_TYP', ACCT_TYP, COUNT(*) FROM \"GLCOA\" GROUP BY ACCT_TYP UNION ALL SELECT 'APVEND.ACTV_FLG', ACTV_FLG, COUNT(*) FROM \"APVEND\" GROUP BY ACTV_FLG UNION ALL SELECT 'GLCOA.ACTV_FLG', ACTV_FLG, COUNT(*) FROM \"GLCOA\" GROUP BY ACTV_FLG;"
+        },
+        "id": "toolu_01VQrnLxDxJ3yXnZB7Ps2Ub9",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT (SELECT COUNT(*) FROM \"APINVH\") AS apinvh, (SELECT COUNT(*) FROM \"APPAYM\") AS appaym, (SELECT COUNT(*) FROM \"APVEND\") AS apvend, (SELECT COUNT(*) FROM \"GLCOA\") AS glcoa, (SELECT COUNT(*) FROM \"GLJRNH\") AS gljrnh, (SELECT COUNT(*) FROM \"GLJRNL\") AS gljrnl, (SELECT COUNT(*) FROM \"GLPERD\") AS glperd, (SELECT COUNT(*) FROM \"SYSDICT\") AS sysdict;"
+        },
+        "id": "toolu_01QroDB9RyjsRGiZJQ36TTeC",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

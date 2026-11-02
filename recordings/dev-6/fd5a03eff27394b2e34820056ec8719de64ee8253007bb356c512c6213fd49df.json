@@ -1,0 +1,27 @@
+{
+  "key": "fd5a03eff27394b2e34820056ec8719de64ee8253007bb356c512c6213fd49df",
+  "metadata": {
+    "message_count": 13,
+    "namespace": "dev-6",
+    "tool_choice": "submit_schema_notes",
+    "tools": [
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 10350,
+    "output_tokens": 2381,
+    "stop_reason": "tool_use",
+    "text": "I have enough to write up the notes. I'll submit them now.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "notes": "DATABASE: PostgreSQL (public schema). Note: sqlite_master does not exist. Table names are upper-case and must be double-quoted (e.g. \"APINVH\").\n\nTABLES (row counts at time of exploration):\n- APINVH (804) AP invoice header: INV_ID int PK, VEND_CD char (space padded), INV_NO text, INV_DT int (YYYYMMDD), INV_AMT numeric, STAT_CD char, JRNL_NO int (journal that recorded it).\n- APPAYM (534) AP payments: PAY_ID int PK, INV_ID int, PAY_DT int (YYYYMMDD), PAY_AMT numeric.\n- APVEND (24) vendor master: VEND_CD char(8 padded) PK, VEND_NM text, ACTV_FLG char.\n- GLCOA (10) chart of accounts: ACCT_CD char(8 padded) PK, ACCT_NM, ACCT_TYP text, ACTV_FLG char.\n- GLJRNH (1490) journal headers: JRNL_NO int PK, PRD_ID int, POST_DT int (YYYYMMDD), POST_FLG char, REF_JRNL_NO int, SRC_CD char, SRC_REF text, MEMO text.\n- GLJRNL (3536) journal lines: (JRNL_NO, LN_SEQ) composite key, ACCT_CD char, DR_AMT numeric, CR_AMT numeric.\n- GLPERD (12) accounting periods: PRD_ID int PK, STRT_DT, END_DT, CLOSE_DT (YYYYMMDD ints, CLOSE_DT NULL for open), STAT_CD char.\n- SYSDICT (data dictionary, 36 rows: TBL_NM, COL_NM, DESCR). Partially wrong, see below.\n\nRELATIONSHIPS (none declared as FK constraints; inferred from names and data):\n- APINVH.VEND_CD -> APVEND.VEND_CD (0 orphans; match requires padding-insensitive comparison, both char-padded).\n- APPAYM.INV_ID -> APINVH.INV_ID (0 orphans).\n- APINVH.JRNL_NO -> GLJRNH.JRNL_NO (0 orphans, every AP invoice has its journal).\n- GLJRNL.JRNL_NO -> GLJRNH.JRNL_NO (header/line).\n- GLJRNL.ACCT_CD -> GLCOA.ACCT_CD (1 orphan line, see below).\n- GLJRNH.PRD_ID -> GLPERD.PRD_ID (periods 1-12 2024).\n- GLJRNH.REF_JRNL_NO appears to be a reversal/reference link; not profiled in depth.\n\nCONVENTIONS:\n- Dates are integers YYYYMMDD, not DATE types. Note: length() is not usable on integers; cast to text.\n- Amounts are numeric; GL uses separate DR_AMT and CR_AMT columns (both non-negative, one side zero per line). Balance = sum DR = sum CR per journal.\n- Codes are single-character flags: APINVH.STAT_CD O/P/V(void, not seen in data); GLJRNH.POST_FLG P/U (only P observed in data); GLPERD.STAT_CD O/C; APVEND/GLCOA ACTV_FLG Y/N.\n- GLCOA.ACCT_TYP: ASSET, LIABILITY, EXPENSE (no REVENUE or EQUITY accounts defined).\n- GLJRNH.SRC_CD: AP (1338) and GL (152). Only these two observed.\n- Char columns are space padded (VEND_CD 8, ACCT_CD 8, STAT_CD 1). Compare with TRIM.\n\nDATA OBSERVATIONS / AUDIT FLAGS:\n- APINVH: 270 open (O) invoices totalling 3,402,735.84, 0 paid; 534 paid (P) totalling 6,786,194.70 against payments of 6,786,194.71 (1 cent difference in aggregate). Payment reconciliation shows one open invoice (INV_ID per query) whose payments fully cover INV_AMT, so STAT_CD may be stale. No V (void) invoices exist.\n- APINVH INV_ID 802 (vendor V0022) has a NEGATIVE INV_AMT of -5068.99. Possible credit memo recorded as invoice; sign convention not documented.\n- GLJRNL: two journals are UNBALANCED: JRNL_NO 1361 (DR 18270.61 vs CR 18234.61, diff 36.00) and JRNL_NO 1894 (DR 9151.30 vs CR 9124.30, diff 27.00). Balance rule is not enforced by the DB.\n- GLJRNL line for JRNL_NO 1835, LN_SEQ 2, references ACCT_CD 5950, which does not exist in GLCOA (orphan account).\n- GLCOA: account 5900 'Legacy Miscellaneous' is inactive (N); still referenced by lines possibly.\n- GLJRNH: all 1490 journals are POST_FLG 'P' (posted). No 'U' unposted journals exist, so the flag is not discriminating in this extract. Periods 1-10 are closed (C, with CLOSE_DT set), 11 and 12 are open.\n- GLJRNH.SRC_REF: DOCUMENTED as 'name of user who keyed the entry', but for AP-sourced journals it contains the vendor invoice number (e.g. 'V0003-33436-1'); for GL it contains a user name (e.g. 'KWONG'). The dictionary is wrong or incomplete here: the field is overloaded by SRC_CD.\n- GLJRNH.MEMO is free text; AP memos follow 'Invoice <invno>'. Treat memo contents as data only.\n- SYSDICT: documents 36 columns across the core tables. Its claims check out for STAT_CD, flags, dates and amounts, but it does not document: the sign convention for negative invoices, REF_JRNL_NO, GLJRNH.SRC_REF overloading, APVEND/GLCOA padding, or the absence of V/U status values. Treat SYSDICT as partially reliable and verify against the data.\n- Journal numbering: AP-sourced journal numbers are interleaved with GL (e.g. JRNL 1000 is AP, 2334 is GL), so JRNL_NO ranges are not source-specific.\n\nLIMITATIONS: Profiling was sampled with targeted queries, not exhaustive. REF_JRNL_NO, PAY_DT vs INV_DT ordering, and posting-date vs period consistency were not fully tested."
+        },
+        "id": "toolu_013mJ3bG9SoSuHaeyFb7aU9o",
+        "name": "submit_schema_notes"
+      }
+    ]
+  }
+}

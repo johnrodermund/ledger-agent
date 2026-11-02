@@ -1,0 +1,42 @@
+{
+  "key": "ac5ecc5df1b7ce112b8b826cd193e9f20ab859791fef27f7d47c6616dd6f204b",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "holdout-3",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 3918,
+    "output_tokens": 983,
+    "stop_reason": "tool_use",
+    "text": "That was a mistake on my part; I'll send a valid query now.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT \"TBL_NM\", \"COL_NM\", \"DESCR\" FROM \"SYSDICT\" ORDER BY 1, 2;"
+        },
+        "id": "toolu_013ZGf7aUXo4S7zZzjKDfHiw",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH.STAT_CD' AS c, \"STAT_CD\"::text AS v, COUNT(*) FROM \"APINVH\" GROUP BY 2 UNION ALL SELECT 'GLJRNH.POST_FLG', \"POST_FLG\"::text, COUNT(*) FROM \"GLJRNH\" GROUP BY 2 UNION ALL SELECT 'GLJRNH.SRC_CD', \"SRC_CD\"::text, COUNT(*) FROM \"GLJRNH\" GROUP BY 2 UNION ALL SELECT 'GLPERD.STAT_CD', \"STAT_CD\"::text, COUNT(*) FROM \"GLPERD\" GROUP BY 2 UNION ALL SELECT 'GLCOA.ACCT_TYP', \"ACCT_TYP\"::text, COUNT(*) FROM \"GLCOA\" GROUP BY 2 UNION ALL SELECT 'APVEND.ACTV_FLG', \"ACTV_FLG\"::text, COUNT(*) FROM \"APVEND\" GROUP BY 2 UNION ALL SELECT 'GLCOA.ACTV_FLG', \"ACTV_FLG\"::text, COUNT(*) FROM \"GLCOA\" GROUP BY 2;"
+        },
+        "id": "toolu_019up9SgeRkbaFu6cZtz6Bm7",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'GLJRNL' AS t, COUNT(*) AS n, SUM(\"DR_AMT\") AS dr, SUM(\"CR_AMT\") AS cr, COUNT(*) FILTER (WHERE \"DR_AMT\"<0 OR \"CR_AMT\"<0) AS neg_rows, COUNT(*) FILTER (WHERE \"DR_AMT\"<>0 AND \"CR_AMT\"<>0) AS both_rows FROM \"GLJRNL\" UNION ALL SELECT 'APINVH', COUNT(*), SUM(\"INV_AMT\"), NULL, COUNT(*) FILTER (WHERE \"INV_AMT\"<0), NULL FROM \"APINVH\" UNION ALL SELECT 'APPAYM', COUNT(*), SUM(\"PAY_AMT\"), NULL, COUNT(*) FILTER (WHERE \"PAY_AMT\"<0), NULL FROM \"APPAYM\";"
+        },
+        "id": "toolu_01QE1Q5Zqmsk8EeGsoo11hm8",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

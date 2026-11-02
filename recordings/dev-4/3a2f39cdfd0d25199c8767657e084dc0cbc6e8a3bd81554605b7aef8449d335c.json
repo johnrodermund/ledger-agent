@@ -1,0 +1,77 @@
+{
+  "key": "3a2f39cdfd0d25199c8767657e084dc0cbc6e8a3bd81554605b7aef8449d335c",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "dev-4",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 2620,
+    "output_tokens": 880,
+    "stop_reason": "tool_use",
+    "text": "There's a SYSDICT table. I'll read it alongside samples of the main tables.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT TBL_NM, COL_NM, DESCR FROM SYSDICT ORDER BY TBL_NM, COL_NM;"
+        },
+        "id": "toolu_01JxmbJKButXEcjZTXfGL5Vc",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH' t, INV_ID::text a, VEND_CD b, INV_NO c, INV_DT::text d, INV_AMT::text e, STAT_CD f, JRNL_NO::text g FROM \"APINVH\" ORDER BY INV_ID LIMIT 8;"
+        },
+        "id": "toolu_01Xk11k8Wk8dwMceXue45yqk",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT PAY_ID, INV_ID, PAY_DT, PAY_AMT FROM \"APPAYM\" ORDER BY PAY_ID LIMIT 8;"
+        },
+        "id": "toolu_01Xyi9snBVbahX2Mbe3RCuif",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT JRNL_NO, PRD_ID, POST_DT, POST_FLG, REF_JRNL_NO, SRC_CD, SRC_REF, LEFT(MEMO,80) AS memo FROM \"GLJRNH\" ORDER BY JRNL_NO LIMIT 8;"
+        },
+        "id": "toolu_01KuKVhXJN515bn7rDU1k633",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT JRNL_NO, LN_SEQ, ACCT_CD, DR_AMT, CR_AMT FROM \"GLJRNL\" ORDER BY JRNL_NO, LN_SEQ LIMIT 12;"
+        },
+        "id": "toolu_01Q5aK1nfM5peYCuhJdmbxBW",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"GLPERD\" ORDER BY PRD_ID;"
+        },
+        "id": "toolu_01Hjs94YDYsm2NLoBJQfcTab",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"APVEND\" ORDER BY VEND_CD LIMIT 10;"
+        },
+        "id": "toolu_01XqFXf66T1JD3qkHs7J8KVY",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT * FROM \"GLCOA\" ORDER BY ACCT_CD;"
+        },
+        "id": "toolu_01Rs36wQrMHpjtrvZcFbgDdz",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

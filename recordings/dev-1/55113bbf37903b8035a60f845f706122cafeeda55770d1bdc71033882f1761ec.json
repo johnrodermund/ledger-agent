@@ -1,0 +1,42 @@
+{
+  "key": "55113bbf37903b8035a60f845f706122cafeeda55770d1bdc71033882f1761ec",
+  "metadata": {
+    "message_count": 5,
+    "namespace": "dev-1",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 3596,
+    "output_tokens": 1462,
+    "stop_reason": "tool_use",
+    "text": "Now the data dictionary and sample data.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT TBL_NM, COL_NM, DESCR FROM SYSDICT ORDER BY TBL_NM, COL_NM;"
+        },
+        "id": "toolu_01E3zfzhhsqqbXs9nEsgjksd",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH' t, STAT_CD c, COUNT(*) n FROM \"APINVH\" GROUP BY STAT_CD UNION ALL SELECT 'GLJRNH', POST_FLG, COUNT(*) FROM \"GLJRNH\" GROUP BY POST_FLG UNION ALL SELECT 'GLPERD', STAT_CD, COUNT(*) FROM \"GLPERD\" GROUP BY STAT_CD UNION ALL SELECT 'APVEND', ACTV_FLG, COUNT(*) FROM \"APVEND\" GROUP BY ACTV_FLG UNION ALL SELECT 'GLCOA', ACCT_TYP || '/' || ACTV_FLG, COUNT(*) FROM \"GLCOA\" GROUP BY ACCT_TYP, ACTV_FLG UNION ALL SELECT 'GLJRNH_SRC', SRC_CD, COUNT(*) FROM \"GLJRNH\" GROUP BY SRC_CD;"
+        },
+        "id": "toolu_01Xkr8VwBxuWvMRCgjWY5okJ",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'APINVH_neg' k, COUNT(*) FROM \"APINVH\" WHERE INV_AMT < 0 UNION ALL SELECT 'APPAYM_neg', COUNT(*) FROM \"APPAYM\" WHERE PAY_AMT < 0 UNION ALL SELECT 'JRNL_both_nonzero', COUNT(*) FROM \"GLJRNL\" WHERE DR_AMT <> 0 AND CR_AMT <> 0 UNION ALL SELECT 'JRNL_neg', COUNT(*) FROM \"GLJRNL\" WHERE DR_AMT < 0 OR CR_AMT < 0 UNION ALL SELECT 'unbalanced_jrnl', COUNT(*) FROM (SELECT JRNL_NO FROM \"GLJRNL\" GROUP BY JRNL_NO HAVING SUM(DR_AMT) <> SUM(CR_AMT)) x UNION ALL SELECT 'orphan_jrnl_lines', COUNT(*) FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.JRNL_NO=l.JRNL_NO) UNION ALL SELECT 'orphan_inv_vend', COUNT(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"APVEND\" v WHERE v.VEND_CD=i.VEND_CD) UNION ALL SELECT 'orphan_pay_inv', COUNT(*) FROM \"APPAYM\" p WHERE NOT EXISTS (SELECT 1 FROM \"APINVH\" i WHERE i.INV_ID=p.INV_ID) UNION ALL SELECT 'orphan_jrnl_acct', COUNT(*) FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLCOA\" a WHERE a.ACCT_CD=l.ACCT_CD) UNION ALL SELECT 'orphan_jrnl_prd', COUNT(*) FROM \"GLJRNH\" h WHERE NOT EXISTS (SELECT 1 FROM \"GLPERD\" p WHERE p.PRD_ID=h.PRD_ID) UNION ALL SELECT 'apinvh_jrnl_missing', COUNT(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.JRNL_NO=i.JRNL_NO);"
+        },
+        "id": "toolu_01M9fv3nuS9X1bX6o2jDGAqj",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

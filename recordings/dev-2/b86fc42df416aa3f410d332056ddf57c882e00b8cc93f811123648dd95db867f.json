@@ -1,0 +1,42 @@
+{
+  "key": "b86fc42df416aa3f410d332056ddf57c882e00b8cc93f811123648dd95db867f",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "dev-2",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 6905,
+    "output_tokens": 1579,
+    "stop_reason": "tool_use",
+    "text": "Several dictionary claims don't match the data: no `V` (void) invoices, no `U` unposted journals, and GLJRNL debits and credits don't balance. I'll check those discrepancies, the joins, and the journal balance per journal.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT 'unbalanced_journals' k, COUNT(*) v FROM (SELECT \"JRNL_NO\" FROM \"GLJRNL\" GROUP BY \"JRNL_NO\" HAVING SUM(\"DR_AMT\") <> SUM(\"CR_AMT\")) x UNION ALL SELECT 'orphan_jrnl_lines', COUNT(*) FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=l.\"JRNL_NO\") UNION ALL SELECT 'lines_bad_acct', COUNT(*) FROM \"GLJRNL\" l WHERE NOT EXISTS (SELECT 1 FROM \"GLCOA\" a WHERE a.\"ACCT_CD\"=l.\"ACCT_CD\") UNION ALL SELECT 'inv_bad_vend', COUNT(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"APVEND\" v WHERE v.\"VEND_CD\"=i.\"VEND_CD\") UNION ALL SELECT 'pay_bad_inv', COUNT(*) FROM \"APPAYM\" p WHERE NOT EXISTS (SELECT 1 FROM \"APINVH\" i WHERE i.\"INV_ID\"=p.\"INV_ID\") UNION ALL SELECT 'inv_bad_jrnl', COUNT(*) FROM \"APINVH\" i WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"JRNL_NO\"=i.\"JRNL_NO\") UNION ALL SELECT 'hdr_bad_period', COUNT(*) FROM \"GLJRNH\" h WHERE NOT EXISTS (SELECT 1 FROM \"GLPERD\" p WHERE p.\"PRD_ID\"=h.\"PRD_ID\") UNION ALL SELECT 'hdr_dup_jrnl', COUNT(*) FROM (SELECT \"JRNL_NO\" FROM \"GLJRNH\" GROUP BY 1 HAVING COUNT(*)>1) d;"
+        },
+        "id": "toolu_01YAh1tx8yLaRSNsbmiGyXnG",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT 'inv_paid_vs_pay' k, COUNT(*) v FROM (SELECT i.\"INV_ID\" FROM \"APINVH\" i LEFT JOIN \"APPAYM\" p ON p.\"INV_ID\"=i.\"INV_ID\" GROUP BY i.\"INV_ID\", i.\"INV_AMT\", i.\"STAT_CD\" HAVING (i.\"STAT_CD\"='P') <> (COALESCE(SUM(p.\"PAY_AMT\"),0) >= i.\"INV_AMT\") ) x UNION ALL SELECT 'overpaid', COUNT(*) FROM (SELECT i.\"INV_ID\" FROM \"APINVH\" i JOIN \"APPAYM\" p ON p.\"INV_ID\"=i.\"INV_ID\" GROUP BY i.\"INV_ID\", i.\"INV_AMT\" HAVING SUM(p.\"PAY_AMT\") > i.\"INV_AMT\") y UNION ALL SELECT 'ap_jrnl_not_AP_src', COUNT(*) FROM \"APINVH\" i JOIN \"GLJRNH\" h ON h.\"JRNL_NO\"=i.\"JRNL_NO\" WHERE h.\"SRC_CD\"<>'AP' UNION ALL SELECT 'bad_dates_apinvh', COUNT(*) FROM \"APINVH\" WHERE \"INV_DT\" NOT BETWEEN 19000101 AND 29991231 UNION ALL SELECT 'ref_jrnl_nonnull', COUNT(*) FROM \"GLJRNH\" WHERE \"REF_JRNL_NO\" IS NOT NULL;"
+        },
+        "id": "toolu_017m76c81DUw1Hgdha91NZR9",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT \"PRD_ID\",\"STRT_DT\",\"END_DT\",\"CLOSE_DT\",\"STAT_CD\" FROM \"GLPERD\" ORDER BY \"PRD_ID\";"
+        },
+        "id": "toolu_01HJVX4E61cPDoLYX11hWnXF",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

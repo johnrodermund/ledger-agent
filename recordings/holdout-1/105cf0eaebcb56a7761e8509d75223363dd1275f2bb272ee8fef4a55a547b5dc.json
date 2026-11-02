@@ -1,0 +1,35 @@
+{
+  "key": "105cf0eaebcb56a7761e8509d75223363dd1275f2bb272ee8fef4a55a547b5dc",
+  "metadata": {
+    "message_count": 11,
+    "namespace": "holdout-1",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 8274,
+    "output_tokens": 1211,
+    "stop_reason": "tool_use",
+    "text": "Journals don't balance: debits exceed credits by 36.00 overall. I'll check which journals are out of balance, and whether invoice totals match payments for paid invoices and what the 'P' status means for the AP-to-GL link.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT l.\"JRNL_NO\", h.\"SRC_CD\", h.\"PRD_ID\", SUM(l.\"DR_AMT\")-SUM(l.\"CR_AMT\") AS diff, COUNT(*) n FROM \"GLJRNL\" l JOIN \"GLJRNH\" h ON h.\"JRNL_NO\"=l.\"JRNL_NO\" GROUP BY l.\"JRNL_NO\", h.\"SRC_CD\", h.\"PRD_ID\" HAVING SUM(l.\"DR_AMT\")-SUM(l.\"CR_AMT\") <> 0 ORDER BY l.\"JRNL_NO\" LIMIT 20;"
+        },
+        "id": "toolu_01MP4sM5CbfcjWEN2cKJVror",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT (SELECT COUNT(*) FROM \"APINVH\" i WHERE i.\"STAT_CD\"='P' AND COALESCE((SELECT SUM(\"PAY_AMT\") FROM \"APPAYM\" p WHERE p.\"INV_ID\"=i.\"INV_ID\"),0)<>i.\"INV_AMT\") AS paid_mismatch, (SELECT COUNT(*) FROM \"APINVH\" i WHERE i.\"STAT_CD\"='O' AND EXISTS (SELECT 1 FROM \"APPAYM\" p WHERE p.\"INV_ID\"=i.\"INV_ID\")) AS open_with_pay, (SELECT COUNT(*) FROM \"APINVH\" i WHERE i.\"STAT_CD\"='P' AND NOT EXISTS (SELECT 1 FROM \"APPAYM\" p WHERE p.\"INV_ID\"=i.\"INV_ID\")) AS paid_no_pay, (SELECT COUNT(*) FROM \"GLJRNH\" h WHERE h.\"SRC_CD\"='AP' AND NOT EXISTS (SELECT 1 FROM \"APINVH\" i WHERE i.\"JRNL_NO\"=h.\"JRNL_NO\")) AS ap_jrnl_no_inv, (SELECT COUNT(*) FROM \"GLPERD\" p WHERE NOT EXISTS (SELECT 1 FROM \"GLJRNH\" h WHERE h.\"PRD_ID\"=p.\"PRD_ID\")) AS periods_no_jrnl, (SELECT COUNT(*) FROM \"GLJRNH\" h WHERE NOT EXISTS (SELECT 1 FROM \"GLPERD\" p WHERE p.\"PRD_ID\"=h.\"PRD_ID\")) AS jrnl_bad_period, (SELECT MIN(\"INV_DT\")||'-'||MAX(\"INV_DT\") FROM \"APINVH\") AS inv_dt_range, (SELECT MIN(\"POST_DT\")||'-'||MAX(\"POST_DT\") FROM \"GLJRNH\") AS post_dt_range, (SELECT COUNT(*) FROM \"GLJRNH\" h JOIN \"GLPERD\" p ON p.\"PRD_ID\"=h.\"PRD_ID\" WHERE p.\"STAT_CD\"='O' AND h.\"POST_DT\" NOT BETWEEN p.\"STRT_DT\" AND p.\"END_DT\") AS jrnl_outside_open;"
+        },
+        "id": "toolu_01R1sDJBQvMHATBbR47mtoHH",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

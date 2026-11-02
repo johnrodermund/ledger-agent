@@ -1,0 +1,42 @@
+{
+  "key": "e0d0a1710603dd4b76e6b64f2acd97838f53f59dc212cd9c3bf771dab0f13079",
+  "metadata": {
+    "message_count": 9,
+    "namespace": "dev-6",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 6845,
+    "output_tokens": 1472,
+    "stop_reason": "tool_use",
+    "text": "The data dictionary has a few claims to check. The DESCR for GLJRNH.SRC_REF says it's a user name, but it holds an invoice number for AP journals. Also, the sign convention and the status-code claims need checking, so I'll run a few more queries.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT 'AP_inv_jrnl_link' chk, COUNT(*) n, SUM(CASE WHEN i.\"JRNL_NO\" IS NULL THEN 1 ELSE 0 END) nulls FROM \"APINVH\" i LEFT JOIN \"GLJRNH\" h ON h.\"JRNL_NO\"=i.\"JRNL_NO\" WHERE h.\"JRNL_NO\" IS NULL UNION ALL SELECT 'jrnl_unbalanced', COUNT(*), 0 FROM (SELECT \"JRNL_NO\" FROM \"GLJRNL\" GROUP BY \"JRNL_NO\" HAVING ROUND(SUM(\"DR_AMT\"),2)<>ROUND(SUM(\"CR_AMT\"),2)) x UNION ALL SELECT 'lines_both_or_neither_side', COUNT(*), 0 FROM \"GLJRNL\" WHERE (\"DR_AMT\"<>0 AND \"CR_AMT\"<>0) OR (\"DR_AMT\"=0 AND \"CR_AMT\"=0) UNION ALL SELECT 'neg_amounts_gljrnl', COUNT(*), 0 FROM \"GLJRNL\" WHERE \"DR_AMT\"<0 OR \"CR_AMT\"<0 UNION ALL SELECT 'neg_inv_amt', COUNT(*), 0 FROM \"APINVH\" WHERE \"INV_AMT\"<0 UNION ALL SELECT 'neg_pay_amt', COUNT(*), 0 FROM \"APPAYM\" WHERE \"PAY_AMT\"<0 UNION ALL SELECT 'orphan_gljrnl_acct', COUNT(*), 0 FROM \"GLJRNL\" l LEFT JOIN \"GLCOA\" c ON c.\"ACCT_CD\"=l.\"ACCT_CD\" WHERE c.\"ACCT_CD\" IS NULL UNION ALL SELECT 'orphan_inv_vend', COUNT(*), 0 FROM \"APINVH\" i LEFT JOIN \"APVEND\" v ON v.\"VEND_CD\"=i.\"VEND_CD\" WHERE v.\"VEND_CD\" IS NULL UNION ALL SELECT 'orphan_pay_inv', COUNT(*), 0 FROM \"APPAYM\" p LEFT JOIN \"APINVH\" i ON i.\"INV_ID\"=p.\"INV_ID\" WHERE i.\"INV_ID\" IS NULL;"
+        },
+        "id": "toolu_01VKFZgaNe5b9XZ7SxSkYaBP",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT i.\"STAT_CD\", COUNT(*) n, ROUND(SUM(i.\"INV_AMT\"),2) inv_total, ROUND(SUM(COALESCE(p.paid,0)),2) paid_total, SUM(CASE WHEN COALESCE(p.paid,0) >= i.\"INV_AMT\" THEN 1 ELSE 0 END) fully_paid_cnt FROM \"APINVH\" i LEFT JOIN (SELECT \"INV_ID\", SUM(\"PAY_AMT\") paid FROM \"APPAYM\" GROUP BY \"INV_ID\") p ON p.\"INV_ID\"=i.\"INV_ID\" GROUP BY i.\"STAT_CD\";"
+        },
+        "id": "toolu_01ArsWv8v6fbP1Q19ucmCjEh",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT h.\"POST_FLG\", h.\"SRC_CD\", h.\"PRD_ID\", COUNT(*) n, MIN(h.\"POST_DT\") min_dt, MAX(h.\"POST_DT\") max_dt, SUM(CASE WHEN LENGTH(h.\"POST_DT\")<>8 THEN 1 ELSE 0 END) bad_len FROM \"GLJRNH\" h GROUP BY 1,2,3 ORDER BY 3,2;"
+        },
+        "id": "toolu_015fzx2RwbJTin8Cn3bHNJDt",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

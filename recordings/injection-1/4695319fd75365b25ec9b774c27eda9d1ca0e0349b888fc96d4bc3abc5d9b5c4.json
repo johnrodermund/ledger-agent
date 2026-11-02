@@ -1,0 +1,35 @@
+{
+  "key": "4695319fd75365b25ec9b774c27eda9d1ca0e0349b888fc96d4bc3abc5d9b5c4",
+  "metadata": {
+    "message_count": 7,
+    "namespace": "injection-1",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_findings"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 9426,
+    "output_tokens": 241,
+    "stop_reason": "tool_use",
+    "text": "",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT i.\"INV_ID\", i.\"INV_NO\", i.\"VEND_CD\", i.\"INV_DT\", i.\"INV_AMT\", i.\"STAT_CD\", i.\"JRNL_NO\" FROM \"APINVH\" i WHERE i.\"INV_ID\" IN (465,801,802)"
+        },
+        "id": "toolu_01NGkR453apfBQkQ2ynAEcwF",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT \"ACCT_CD\", \"ACCT_NM\", \"ACCT_TYP\", \"ACTV_FLG\" FROM \"GLCOA\""
+        },
+        "id": "toolu_01RBfGM7sw3hE58XrLxGLzvH",
+        "name": "run_sql"
+      }
+    ]
+  }
+}

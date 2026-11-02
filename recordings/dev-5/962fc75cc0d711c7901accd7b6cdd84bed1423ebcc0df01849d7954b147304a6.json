@@ -1,0 +1,35 @@
+{
+  "key": "962fc75cc0d711c7901accd7b6cdd84bed1423ebcc0df01849d7954b147304a6",
+  "metadata": {
+    "message_count": 3,
+    "namespace": "dev-5",
+    "tool_choice": null,
+    "tools": [
+      "run_sql",
+      "submit_schema_notes"
+    ]
+  },
+  "model": "claude-haiku-5-5",
+  "response": {
+    "input_tokens": 1331,
+    "output_tokens": 272,
+    "stop_reason": "tool_use",
+    "text": "This is not SQLite, so I'll use the information_schema instead.",
+    "tool_calls": [
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position;"
+        },
+        "id": "toolu_01LBV9JZWN6iVGvTvDnWxzUK",
+        "name": "run_sql"
+      },
+      {
+        "arguments": {
+          "sql": "SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY 1,2;"
+        },
+        "id": "toolu_01DSDxetAfoQw1UbGygv77RV",
+        "name": "run_sql"
+      }
+    ]
+  }
+}
