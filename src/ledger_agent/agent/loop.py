@@ -118,7 +118,8 @@ def run_tool_loop(
         if problem is None:
             if not resp.tool_calls:
                 problem = "No submission was made."
-            elif used >= query_limit:
+            elif at_limit:  # a forced turn that did not submit; a normal turn that merely
+                # used the last query moves on to the forced turn without spending the retry
                 problem = "SQL is no longer available."
         if problem is not None:
             if retried:

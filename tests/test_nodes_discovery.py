@@ -141,11 +141,26 @@ def test_loop_recovers_after_one_malformed_turn(db, tmp_path):
 
 
 def test_loop_gives_up_if_forced_submit_is_ignored(db, tmp_path):
-    client, _ = make_client(tmp_path, [
-        reply(sql_call(GOOD_SQL)), reply(sql_call(GOOD_SQL)), reply(sql_call(GOOD_SQL)),
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL)),  # uses the only query
+        reply(sql_call(GOOD_SQL)),  # forced turn ignored: one retry
+        reply(sql_call(GOOD_SQL)),  # retry ignored too: give up
     ])
     result = loop(client, db, query_limit=1)
     assert result.failure and result.limit_hit
+    assert len(provider.requests) == 3 and provider.script == []
+
+
+def test_loop_forced_turn_without_tool_call_gets_a_retry(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL)),
+        ModelResponse(text="no tool call"),
+        reply(notes_call()),
+    ])
+    result = loop(client, db, query_limit=1)
+    assert result.submitted == {"notes": "notes"} and result.failure is None
+    assert result.limit_hit and len(provider.requests) == 3
+    assert provider.requests[2].tool_choice == "submit_schema_notes"
 
 
 def test_loop_reports_missing_required_fields_back_to_model(db, tmp_path):
