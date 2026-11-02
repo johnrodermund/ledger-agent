@@ -4,21 +4,40 @@ from __future__ import annotations
 
 from typing import Any
 
-from ledger_agent.agent.loop import LoopResult, run_tool_loop
+from pydantic import ValidationError
+
+from ledger_agent.agent.loop import LoopResult, format_query_result, run_tool_loop
 from ledger_agent.agent.prompts import (
     EXPLORE_START,
     EXPLORE_SYSTEM,
     FINDING_TYPES,
     HUNT_START,
     HUNT_SYSTEM,
+    PROPOSE_PROMPT,
+    PROPOSE_RETRY,
+    PROPOSE_SYSTEM,
+    SUBMIT_CORRECTION_TOOL,
     SUBMIT_FINDINGS_TOOL,
     SUBMIT_SCHEMA_NOTES_TOOL,
 )
-from ledger_agent.agent.state import AgentState, Deps, DroppedFinding
-from ledger_agent.models import Finding, RowRef
-from ledger_agent.tools.sql import run_query
+from ledger_agent.agent.state import AgentState, Deps, DroppedFinding, Evidence, Outcome
+from ledger_agent.db import connect_ro
+from ledger_agent.llm.client import (
+    DEFAULT_MODEL,
+    ModelClient,
+    ModelRequest,
+    assistant_message,
+    tool_result_message,
+)
+from ledger_agent.models import Correction, Finding, RowRef
+from ledger_agent.tools.sql import QueryResult, run_query
+from ledger_agent.verifier.render import render_text
+from ledger_agent.verifier.verify import verify as verify_correction
 
-__all__ = ["Deps", "explore", "hunt", "confirm"]
+__all__ = ["Deps", "explore", "hunt", "confirm", "pick", "propose", "verify"]
+
+EVIDENCE_ROWS = 20
+TOKEN_LIMIT_REASON = "token limit reached"
 
 
 def _record_limits(hit: list[str], stage: str, result: LoopResult) -> list[str]:
@@ -46,6 +65,7 @@ def explore(state: AgentState, deps: Deps) -> dict[str, Any]:
     return {
         "schema_notes": notes if isinstance(notes, str) else "",
         "limits_hit": _record_limits(state["limits_hit"], "explore", result),
+        "queries": state.get("queries", 0) + result.queries_used,
     }
 
 
@@ -120,6 +140,7 @@ def hunt(state: AgentState, deps: Deps) -> dict[str, Any]:
         "findings": findings,
         "dropped": dropped,
         "limits_hit": _record_limits(state["limits_hit"], "hunt", result),
+        "queries": state.get("queries", 0) + result.queries_used,
     }
 
 
@@ -142,9 +163,15 @@ def _merge(findings: list[Finding]) -> list[Finding]:
     return sorted(merged, key=lambda x: x.finding_id)
 
 
+def _evidence(result: QueryResult) -> Evidence:
+    return Evidence(columns=result.columns, rows=result.rows[:EVIDENCE_ROWS],
+                    truncated=result.truncated or len(result.rows) > EVIDENCE_ROWS)
+
+
 def confirm(state: AgentState, deps: Deps) -> dict[str, Any]:
     dropped = list(state["dropped"])
     kept: list[Finding] = []
+    evidence: dict[str, Evidence] = {}
     for f in state["findings"]:
         result = run_query(state["dbname"], f.evidence_sql)
         if not result.ok:
@@ -153,6 +180,166 @@ def confirm(state: AgentState, deps: Deps) -> dict[str, Any]:
             reason = "evidence query returned no rows"
         else:
             kept.append(f)
+            evidence[f.finding_id] = _evidence(result)
             continue
         dropped.append(DroppedFinding(finding_id=f.finding_id, summary=f.summary, reason=reason))
-    return {"findings": _merge(kept), "dropped": dropped}
+    merged = _merge(kept)
+    return {
+        "findings": merged,
+        "dropped": dropped,
+        "evidence": {f.finding_id: evidence[f.finding_id] for f in merged},
+        "queue": [f.finding_id for f in merged],
+        "queries": state.get("queries", 0) + len(state["findings"]),
+    }
+
+
+# Propose and verify ---------------------------------------------------------------------
+
+
+class _TokenLimit(Exception):
+    pass
+
+
+def _validation_message(e: ValidationError) -> str:
+    return "; ".join(
+        f"{'.'.join(str(p) for p in err['loc']) or 'correction'}: {err['msg']}"
+        for err in e.errors()
+    )
+
+
+def _parse_correction(resp: Any) -> tuple[Correction | None, str | None]:
+    """The submitted correction, or a description of what was wrong with the reply."""
+    call = next((c for c in resp.tool_calls if c.name == SUBMIT_CORRECTION_TOOL["name"]), None)
+    if call is None:
+        return None, "No submission was made."
+    try:
+        return Correction.model_validate(call.arguments), None
+    except ValidationError as e:
+        return None, f"The submission is invalid: {_validation_message(e)}."
+
+
+def _request_correction(
+    client: ModelClient, system: str, prompt: str, token_limit: int
+) -> tuple[Correction | None, str | None]:
+    """One model call, plus one retry carrying the validation error if the reply is
+    malformed. A second failure returns (None, error). Raises _TokenLimit when the
+    budget runs out before the retry. This is not a fix attempt."""
+    tools = [SUBMIT_CORRECTION_TOOL]
+    msgs: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+    problem = ""
+    for retry in (False, True):
+        if retry and client.tokens_used >= token_limit:
+            raise _TokenLimit
+        resp = client.complete(ModelRequest(DEFAULT_MODEL, system, msgs, tools))
+        correction, error = _parse_correction(resp)
+        if correction is not None:
+            return correction, None
+        problem = error or ""
+        note = {"type": "text", "text": f"{problem} Respond by calling the "
+                f"`{SUBMIT_CORRECTION_TOOL['name']}` tool with a valid correction."}
+        assistant = assistant_message(resp)
+        if assistant["content"]:
+            msgs.append(assistant)
+        if resp.tool_calls:
+            feedback = tool_result_message([(c.id, problem, True) for c in resp.tool_calls])
+            feedback["content"].append(note)
+            msgs.append(feedback)
+        else:
+            msgs.append({"role": "user", "content": [note]})
+    return None, problem
+
+
+def _find(state: AgentState) -> Finding:
+    return next(f for f in state["findings"] if f.finding_id == state["current"])
+
+
+def _end_finding(state: AgentState, outcome: Outcome) -> dict[str, Any]:
+    return {
+        "outcomes": [*state["outcomes"], outcome],
+        "current": None, "attempt": 0, "last_failure": None, "proposal": None,
+    }
+
+
+def _stop_for_tokens(state: AgentState) -> dict[str, Any]:
+    """Out of tokens: the current finding and everything still queued need a person."""
+    pending = ([state["current"]] if state["current"] else []) + list(state["queue"])
+    outcomes = [*state["outcomes"], *(
+        Outcome(finding_id=fid, status="needs_human",
+                attempts=state["attempt"] if fid == state["current"] else 0,
+                reason=TOKEN_LIMIT_REASON) for fid in pending)]
+    hit = list(state["limits_hit"])
+    if "tokens" not in hit:
+        hit.append("tokens")
+    return {"outcomes": outcomes, "queue": [], "current": None, "attempt": 0,
+            "last_failure": None, "proposal": None, "limits_hit": hit}
+
+
+def pick(state: AgentState, deps: Deps) -> dict[str, Any]:
+    queue = list(state["queue"])
+    if not queue:
+        return {"current": None}
+    return {"current": queue[0], "queue": queue[1:], "attempt": 0, "last_failure": None,
+            "proposal": None}
+
+
+def _propose_prompt(state: AgentState, finding: Finding) -> str:
+    evidence = state["evidence"].get(finding.finding_id)
+    if evidence is None:
+        shown = "(none recorded)"
+    else:
+        shown = format_query_result(QueryResult(
+            ok=True, columns=evidence.columns, rows=evidence.rows, truncated=evidence.truncated))
+    rows = ", ".join(f"{r.table} {r.key}" for r in finding.affected_rows) or "(none)"
+    retry = ""
+    if state["last_failure"] and state["proposal"] is not None:
+        retry = PROPOSE_RETRY.format(
+            previous=state["attempt"], reason=state["last_failure"],
+            correction=state["proposal"].model_dump_json())
+    return PROPOSE_PROMPT.format(
+        notes=state["schema_notes"] or "(no schema notes were produced)",
+        finding_id=finding.finding_id, finding_type=finding.type, summary=finding.summary,
+        rows=rows, evidence_sql=finding.evidence_sql, evidence=shown, retry=retry)
+
+
+def propose(state: AgentState, deps: Deps) -> dict[str, Any]:
+    finding = _find(state)
+    if finding.type == "other":
+        return _end_finding(state, Outcome(
+            finding_id=finding.finding_id, status="needs_human", attempts=0,
+            reason="no correction is proposed for a finding of type other"))
+    if deps.client.tokens_used >= deps.limits.tokens:
+        return _stop_for_tokens(state)
+    try:
+        correction, problem = _request_correction(
+            deps.client, PROPOSE_SYSTEM, _propose_prompt(state, finding), deps.limits.tokens)
+    except _TokenLimit:
+        return _stop_for_tokens(state)
+    if correction is None:
+        return _end_finding(state, Outcome(
+            finding_id=finding.finding_id, status="needs_human", attempts=state["attempt"],
+            reason=f"the model did not produce a valid correction: {problem}"))
+    return {"proposal": correction}
+
+
+def _next_jrnl_no(dbname: str) -> int:
+    with connect_ro(dbname) as conn:
+        return conn.execute('SELECT coalesce(max("JRNL_NO"), 0) + 1 FROM "GLJRNH"').fetchone()[0]
+
+
+def verify(state: AgentState, deps: Deps) -> dict[str, Any]:
+    finding, correction = _find(state), state["proposal"]
+    if correction is None:
+        raise RuntimeError("verify ran without a proposal")
+    attempt = state["attempt"] + 1
+    result = verify_correction(state["dbname"], finding, correction)
+    if result.passed:
+        return _end_finding(state, Outcome(
+            finding_id=finding.finding_id, status="verified", correction=correction,
+            attempts=attempt,
+            rendered_sql=render_text(correction, _next_jrnl_no(state["dbname"]))))
+    failure = f"{result.check}: {result.reason}"
+    if attempt >= deps.limits.fix_attempts:
+        return _end_finding(state, Outcome(
+            finding_id=finding.finding_id, status="needs_human", attempts=attempt,
+            reason=f"verifier rejected every correction; last: {failure}"))
+    return {"attempt": attempt, "last_failure": failure}

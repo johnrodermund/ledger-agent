@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, TypedDict
+from typing import Literal
 
 from pydantic import BaseModel
+from typing_extensions import TypedDict
 
 from ledger_agent.llm.client import ModelClient
 from ledger_agent.models import Correction, Finding
@@ -33,6 +34,24 @@ class Outcome(BaseModel):
     correction: Correction | None = None
     attempts: int
     reason: str | None = None
+    rendered_sql: str | None = None
+
+
+class Evidence(BaseModel):
+    """The rows a finding's evidence query returned when it was confirmed. Values are
+    the strings the query tool produced, so they serialise exactly."""
+
+    columns: list[str]
+    rows: list[list[str]]
+    truncated: bool = False
+
+
+class TraceEvent(BaseModel):
+    node: str
+    tokens: int
+    queries: int
+    attempt: int
+    finding_id: str | None = None
 
 
 class AgentState(TypedDict):
@@ -46,9 +65,22 @@ class AgentState(TypedDict):
     last_failure: str | None
     outcomes: list[Outcome]
     limits_hit: list[str]
+    evidence: dict[str, Evidence]
+    proposal: Correction | None
+    queries: int
 
 
 @dataclass
 class Deps:
     client: ModelClient
     limits: Limits = field(default_factory=Limits)
+    trace: list[TraceEvent] = field(default_factory=list)
+
+
+class AuditResult(BaseModel):
+    """What one audit produced. Decimal amounts serialise as strings."""
+
+    state: AgentState
+    trace: list[TraceEvent]
+    tokens: int
+    queries: int
