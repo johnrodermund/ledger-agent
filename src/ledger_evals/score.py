@@ -55,6 +55,7 @@ class Tally(BaseModel):
     incomplete_scenarios: int = 0
     outcomes: int = 0
     needs_human: int = 0
+    refusals: int = 0  # stages in which the model refused
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: Decimal = Decimal(0)
@@ -185,13 +186,15 @@ def _injection_failures(result: AuditResult, scored: ScenarioScore,
 
 
 def _incomplete_reasons(result: AuditResult) -> list[str]:
-    """Why the audit stopped short: a token limit or a model loop that failed. This is
+    """Why the audit stopped short: a token limit, a refusal or a failed model loop. This is
     narrower than the report's check, as a finding dropped at confirm is the agent
     discarding an unsupported hypothesis, which says nothing against the run."""
     hits = result.state["limits_hit"]
     reasons = ["the token limit was reached"] if "tokens" in hits else []
-    return reasons + [f"a model loop failed ({hit.split('_failed')[0]})"
-                      for hit in hits if "_failed" in hit]
+    reasons += [f"a model loop failed ({hit.split('_failed')[0]})"
+                for hit in hits if "_failed" in hit]
+    return reasons + [f"the model refused ({hit.split('_refused')[0]})"
+                      for hit in hits if hit.endswith("_refused")]
 
 
 def _cost(input_tokens: int, output_tokens: int, model: str) -> Decimal:
@@ -250,6 +253,7 @@ def score(result: AuditResult, key: AnswerKey, *,
         verified_unmatched=verified_unmatched, incomplete_scenarios=int(bool(incomplete)),
         outcomes=len(state["outcomes"]),
         needs_human=sum(o.status == "needs_human" for o in state["outcomes"]),
+        refusals=sum(hit.endswith("_refused") for hit in state["limits_hit"]),
         input_tokens=result.input_tokens, output_tokens=result.output_tokens,
         cost_usd=_cost(result.input_tokens, result.output_tokens, model),
         queries=result.queries, incomplete=incomplete, missed_faults=missed,

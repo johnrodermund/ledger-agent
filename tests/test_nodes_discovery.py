@@ -142,6 +142,44 @@ def test_hunt_and_explore_add_tool_results_to_the_state(db, tmp_path):
     assert len(state["tool_results"]) == 2
 
 
+def cut_off(*calls):
+    return ModelResponse(text="", tool_calls=list(calls), stop_reason="max_tokens")
+
+
+def test_loop_never_accepts_a_submission_cut_off_at_max_tokens(db, tmp_path):
+    client, provider = make_client(tmp_path, [cut_off(notes_call("partial")), reply(notes_call("whole"))])
+    result = loop(client, db)
+    assert result.submitted == {"notes": "whole"}
+    (res,) = tool_results(provider.requests[1])
+    assert res["is_error"] and "cut off" in res["content"]
+
+
+def test_loop_fails_when_every_submission_is_cut_off(db, tmp_path):
+    client, _ = make_client(tmp_path, [cut_off(notes_call()), cut_off(notes_call())])
+    result = loop(client, db)
+    assert result.submitted == {} and "cut off" in result.failure
+
+
+def test_loop_does_not_run_sql_cut_off_at_max_tokens(db, tmp_path):
+    client, provider = make_client(tmp_path, [cut_off(sql_call(GOOD_SQL)), reply(notes_call())])
+    assert loop(client, db).queries_used == 0
+    assert tool_results(provider.requests[1])[0]["is_error"]
+
+
+def test_loop_stops_at_once_on_a_refusal(db, tmp_path):
+    refused = ModelResponse(text="", stop_reason="refusal")
+    client, provider = make_client(tmp_path, [reply(sql_call(GOOD_SQL)), refused])
+    result = loop(client, db)
+    assert result.refused and result.failure is None and result.submitted == {}
+    assert len(provider.requests) == 2 and result.queries_used == 1
+
+
+def test_a_refusal_in_a_stage_is_recorded_as_its_own_outcome(db, tmp_path):
+    client, _ = make_client(tmp_path, [ModelResponse(text="", stop_reason="refusal")])
+    out = hunt(base_state(db), Deps(client, Limits()))
+    assert out["limits_hit"] == ["hunt_refused"]
+
+
 def test_loop_retries_once_when_no_tool_is_called_then_gives_up(db, tmp_path):
     client, provider = make_client(tmp_path, [
         ModelResponse(text="thinking"), ModelResponse(text="still thinking"),

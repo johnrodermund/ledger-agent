@@ -3,6 +3,8 @@ import uuid
 import psycopg
 from decimal import Decimal
 
+import anthropic
+import httpx
 import pytest
 from fakes import FakeProvider, call, reply
 
@@ -12,7 +14,12 @@ from ledger_agent import cli
 from ledger_agent.db import DatabaseUnavailable, connect_admin
 from ledger_agent.erp.faults import build_scenario
 from ledger_agent.erp.load import load
-from ledger_agent.llm.client import ModelClient, ModelRequest, ModelResponse
+from ledger_agent.llm.client import (
+    ModelClient,
+    ModelRequest,
+    ModelResponse,
+    TransientProviderError,
+)
 from ledger_agent.models import Correction, FaultType, ScenarioSpec
 from ledger_agent.report import write_report
 from ledger_evals.bad_fixes import FIRST_OPEN, _true_fix
@@ -180,6 +187,31 @@ def test_malformed_retry_does_not_use_a_fix_attempt(db, fault, tmp_path):
         reply(text="no tool call"), propose_reply(true_args(fault))])
     [outcome] = result.state["outcomes"]
     assert outcome.status == "verified" and outcome.attempts == 1
+
+
+def test_a_correction_cut_off_at_max_tokens_is_never_verified(db, fault, tmp_path):
+    cut = ModelResponse(text="", stop_reason="max_tokens",
+                        tool_calls=[call("submit_correction", "p1", **true_args(fault))])
+    result, provider = run(db, tmp_path, [
+        *discovery(finding_item(fault)), cut, propose_reply(true_args(fault), "p2")])
+    [outcome] = result.state["outcomes"]
+    assert outcome.status == "verified" and outcome.attempts == 1
+    assert "cut off" in str(provider.requests[-1].messages[-1]["content"])
+    assert len(provider.requests) == 4
+
+
+def test_a_refused_correction_is_a_distinct_outcome_and_the_audit_moves_on(two_faults, tmp_path):
+    db, (one, two) = two_faults
+    result, _ = run(db, tmp_path, [
+        *discovery(finding_item(one), finding_item(two)),
+        ModelResponse(text="", stop_reason="refusal"), propose_reply(true_args(two))])
+    assert [(o.finding_id, o.status) for o in result.state["outcomes"]] == [
+        ("F001", "refused"), ("F002", "verified")]
+    assert "propose_refused" in result.state["limits_hit"]
+    write_report(result, tmp_path / "out")
+    text = (tmp_path / "out" / "report.md").read_text()
+    assert "Model refusals: 1" in text and "refused" in text.split("## Unresolved findings")[1]
+    assert "incomplete" in text
 
 
 def test_other_type_goes_to_needs_human_without_propose(db, fault, tmp_path):
@@ -365,6 +397,26 @@ def cli_run(db, tmp_path, monkeypatch, script):
                         lambda ns: ModelClient(provider, "live", tmp_path / "rec"))
     out = tmp_path / "out"
     return cli.main(["audit", "--db", db, "--out", str(out)]), out
+
+
+def api_error(status, body_message):
+    response = httpx.Response(status, request=httpx.Request("POST", "http://test/v1/messages"))
+    return anthropic.APIStatusError(body_message, response=response, body=None)
+
+
+@pytest.mark.parametrize("error", [
+    api_error(400, "invalid request"), TransientProviderError("still overloaded")],
+    ids=["client", "transient"])
+def test_an_api_error_ends_the_audit_with_exit_1(db, tmp_path, monkeypatch, capsys, error):
+    class Failing:
+        def complete(self, req):
+            raise error
+
+    monkeypatch.setattr(cli, "client_from_env", lambda ns: ModelClient(
+        Failing(), "live", tmp_path / "rec", sleep=lambda s: None))
+    out = tmp_path / "out"
+    code = cli.main(["audit", "--db", db, "--out", str(out)])
+    assert_failed_cleanly(code, out, capsys)
 
 
 def assert_failed_cleanly(code, out, capsys):

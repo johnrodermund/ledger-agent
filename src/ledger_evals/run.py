@@ -171,6 +171,7 @@ def _metric_rows(t: Tally) -> list[str]:
         f"| Verified fixes for findings credited to no fault | {t.verified_unmatched} |",
         f"| End-to-end fix rate | {_percent(t.valid_fixes, planted)} |",
         f"| Needs human rate | {_percent(t.needs_human, t.outcomes)} |",
+        f"| Refusals | {t.refusals} |",
         f"| Incomplete scenarios | {t.incomplete_scenarios} |",
         f"| Tokens | {t.tokens} |",
         f"| Cost (USD) | {t.cost_usd:.4f} |",

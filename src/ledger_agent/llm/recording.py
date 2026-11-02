@@ -2,8 +2,9 @@
 
 A recording is one JSON file per request at ``<recordings>/<namespace>/<key>.json``.
 Files are written deterministically (sorted keys, fixed indent, trailing newline)
-so that diffs stay reviewable. Only the request payload and the response are
-stored: no API key and no HTTP headers ever reach this module.
+so that diffs stay reviewable. A file holds the key, the model, the response and a
+little metadata, not the request, which is reproduced by the run and is large: no API
+key and no HTTP headers ever reach this module.
 """
 
 from __future__ import annotations
@@ -52,13 +53,32 @@ def recording_path(root: Path, namespace: str, key: str) -> Path:
     return Path(root) / namespace / f"{key}.json"
 
 
+def recording_exists(root: Path, namespace: str, req: Any) -> bool:
+    return recording_path(root, namespace, request_key(req)).is_file()
+
+
+def _metadata(namespace: str, req: Any) -> dict[str, Any]:
+    """Enough to tell recordings apart when debugging. No clock, so a re-record of the
+    same answer gives the same file."""
+    return {
+        "namespace": namespace,
+        "message_count": len(req.messages),
+        "tools": [tool["name"] for tool in req.tools],
+        "tool_choice": req.tool_choice,
+    }
+
+
 def save_recording(root: Path, namespace: str, req: Any, response: Any) -> Path:
     key = request_key(req)
     path = recording_path(root, namespace, key)
     path.parent.mkdir(parents=True, exist_ok=True)
-    doc = {"key": key, "request": request_payload(req), "response": asdict(response)}
+    doc = {"key": key, "model": req.model, "response": asdict(response),
+           "metadata": _metadata(namespace, req)}
     text = json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
-    path.write_text(text, encoding="utf-8", newline="\n")
+    # Through a temporary name: an interrupted run must not leave a file that looks whole.
+    partial = path.with_suffix(".partial")
+    partial.write_text(text, encoding="utf-8", newline="\n")
+    partial.replace(path)
     return path
 
 

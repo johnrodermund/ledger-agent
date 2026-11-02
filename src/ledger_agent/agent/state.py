@@ -43,7 +43,7 @@ class DroppedFinding(BaseModel):
 
 class Outcome(BaseModel):
     finding_id: str
-    status: Literal["verified", "needs_human"]
+    status: Literal["verified", "needs_human", "refused"]
     correction: Correction | None = None
     attempts: int
     reason: str | None = None

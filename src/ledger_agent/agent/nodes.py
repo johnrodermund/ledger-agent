@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from ledger_agent.agent.loop import LoopResult, format_query_result, run_tool_loop
+from ledger_agent.agent.loop import CUT_OFF, LoopResult, format_query_result, run_tool_loop
 from ledger_agent.agent.prompts import (
     EXPLORE_START,
     EXPLORE_SYSTEM,
@@ -61,6 +61,8 @@ def _record_limits(hit: list[str], stage: str, result: LoopResult) -> list[str]:
         hit.append("tokens")
     if result.failure:
         hit.append(f"{stage}_failed: {result.failure}")
+    if result.refused:
+        hit.append(f"{stage}_refused")
     return hit
 
 
@@ -216,6 +218,10 @@ class _TokenLimit(Exception):
     pass
 
 
+class _Refused(Exception):
+    pass
+
+
 def _validation_message(e: ValidationError) -> str:
     return "; ".join(
         f"{'.'.join(str(p) for p in err['loc']) or 'correction'}: {err['msg']}"
@@ -225,6 +231,8 @@ def _validation_message(e: ValidationError) -> str:
 
 def _parse_correction(resp: Any) -> tuple[Correction | None, str | None]:
     """The submitted correction, or a description of what was wrong with the reply."""
+    if resp.stop_reason == "max_tokens":
+        return None, CUT_OFF  # a partial submission is never accepted
     call = next((c for c in resp.tool_calls if c.name == SUBMIT_CORRECTION_TOOL["name"]), None)
     if call is None:
         return None, "No submission was made."
@@ -240,8 +248,9 @@ def _request_correction(
 ) -> tuple[Correction | None, str | None]:
     """One model call, plus one retry carrying the validation error if the reply is
     malformed. A second failure returns (None, error). Raises _TokenLimit when the
-    budget runs out before the retry. This is not a fix attempt. Submissions that fail
-    validation are added to malformed, so they stay on record however this ends."""
+    budget runs out before the retry, and _Refused if the model declines. This is not a
+    fix attempt. Submissions that fail validation are added to malformed, so they stay
+    on record however this ends."""
     tools = [SUBMIT_CORRECTION_TOOL]
     msgs: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
     problem = ""
@@ -249,6 +258,8 @@ def _request_correction(
         if retry and client.tokens_used >= token_limit:
             raise _TokenLimit
         resp = client.complete(ModelRequest(DEFAULT_MODEL, system, msgs, tools))
+        if resp.stop_reason == "refusal":
+            raise _Refused
         correction, error = _parse_correction(resp)
         if correction is not None:
             return correction, None
@@ -358,6 +369,14 @@ def propose(state: AgentState, deps: Deps) -> dict[str, Any]:
             deps.client, PROPOSE_SYSTEM, _propose_prompt(state, finding), stop_at, malformed)
     except _TokenLimit:
         return _stop_for_tokens(state) | {"malformed": [*state["malformed"], *malformed]}
+    except _Refused:
+        hit = list(state["limits_hit"])
+        if "propose_refused" not in hit:
+            hit.append("propose_refused")
+        return _end_finding(state, Outcome(
+            finding_id=finding.finding_id, status="refused", attempts=state["attempt"],
+            reason="the model refused to propose a correction")) | {
+                "malformed": [*state["malformed"], *malformed], "limits_hit": hit}
     kept = {"malformed": [*state["malformed"], *malformed]}
     if correction is None:
         return _end_finding(state, Outcome(

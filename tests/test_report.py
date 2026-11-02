@@ -54,6 +54,12 @@ def test_report_lists_needs_human_as_unresolved(tmp_path):
     assert text.index("gave up") < text.index("## Dropped findings")
 
 
+def test_report_shows_a_stage_refusal_as_incomplete(tmp_path):
+    write_report(make_result(limits_hit=["hunt_refused"]), tmp_path)
+    text = read(tmp_path)
+    assert "the model refused (hunt)" in text and "Model refusals: 1" in text
+
+
 def test_report_shows_rendered_sql_and_evidence(tmp_path):
     write_report(make_result([verified()], [make_finding()]), tmp_path)
     text = read(tmp_path)

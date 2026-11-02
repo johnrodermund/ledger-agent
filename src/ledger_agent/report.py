@@ -55,6 +55,9 @@ def _finding_section(result: AuditResult, outcome: Outcome) -> list[str]:
         out += [_fence(outcome.rendered_sql or "", "sql"), ""]
         if outcome.correction is not None:
             out += ["Reasoning:", "", _fence(outcome.correction.reasoning), ""]
+    elif outcome.status == "refused":
+        out += ["The model refused this finding, so it needs a person. Reason:", "",
+                _fence(outcome.reason or "no reason recorded"), ""]
     else:
         out += [f"Needs a person after {outcome.attempts} fix attempt(s). Reason:", "",
                 _fence(outcome.reason or "no reason recorded"), ""]
@@ -63,14 +66,16 @@ def _finding_section(result: AuditResult, outcome: Outcome) -> list[str]:
 
 def incomplete_reasons(result: AuditResult) -> list[str]:
     """Why the audit may have missed things. A spent query budget alone does not count:
-    the model still submitted. A token limit, a loop that never submitted, or findings
-    that could not be checked do."""
+    the model still submitted. A token limit, a loop that never submitted, a refusal,
+    or findings that could not be checked do."""
     state = result.state
     reasons = []
     if "tokens" in state["limits_hit"]:
         reasons.append("the token limit was reached")
     reasons += [f"a model loop failed ({hit.split('_failed')[0]})"
                 for hit in state["limits_hit"] if "_failed" in hit]
+    reasons += [f"the model refused ({hit.split('_refused')[0]})"
+                for hit in state["limits_hit"] if hit.endswith("_refused")]
     if state["dropped"]:
         reasons.append(f"{len(state['dropped'])} submitted finding(s) were dropped")
     return reasons
@@ -88,6 +93,7 @@ def render_markdown(result: AuditResult) -> str:
         f"- Verified corrections: {len(verified)}",
         f"- Unresolved findings: {len(unresolved)}",
         f"- Dropped findings: {len(dropped)}",
+        f"- Model refusals: {sum(hit.endswith('_refused') for hit in state['limits_hit'])}",
         f"- Model tokens used: {result.tokens}",
         f"- Queries run: {result.queries}",
         "",

@@ -10,7 +10,7 @@ from fakes import FakeProvider, call, reply
 from ledger_agent.cli import main as cli_main
 from ledger_agent.db import DatabaseUnavailable, connect_admin
 from ledger_agent.erp.faults import HOSTILE_MEMO, build_scenario
-from ledger_agent.llm.client import ModelClient
+from ledger_agent.llm.client import ModelClient, ModelResponse
 from ledger_agent.llm.recording import RecordingMissing
 from ledger_agent.models import AnswerKey, DecoyType, FaultType
 from ledger_evals import run as run_module
@@ -314,6 +314,15 @@ def test_results_show_misses_and_label_a_non_holdout_run(tmp_path, fake_clients)
     assert "Holdout aggregate" not in md
     for fault in key.faults[1:]:
         assert fault.fault_id in md
+
+
+def test_results_show_refusals(tmp_path, fake_clients):
+    scripts, _ = fake_clients
+    scripts["dev-2"] = [ModelResponse(text="", stop_reason="refusal"), *script_for(BY_ID["dev-2"])[1:]]
+    code, out = invoke(tmp_path, "--scenario", "dev-2")
+    assert code == 0
+    assert read_results(out)["headline"]["refusals"] == 1
+    assert "| Refusals | 1 |" in (out / "results.md").read_text(encoding="utf-8")
 
 
 def test_each_scenario_gets_a_fresh_client(tmp_path, fake_clients):

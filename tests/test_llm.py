@@ -4,6 +4,8 @@ import pytest
 
 from ledger_agent.llm.client import (
     API_MAX_RETRIES,
+    BACKOFF_BASE_SECONDS,
+    MAX_RETRY_WAIT_SECONDS,
     ModelClient,
     ModelRequest,
     ModelResponse,
@@ -26,6 +28,7 @@ RESP = ModelResponse(
     tool_calls=[ToolCall(id="t1", name="run_sql", arguments={"sql": "select 1"})],
     input_tokens=10,
     output_tokens=5,
+    stop_reason="tool_use",
 )
 
 
@@ -121,6 +124,50 @@ def test_retries_transient_errors_then_raises(tmp_path):
     assert bad.calls == API_MAX_RETRIES + 1
 
 
+def test_backoff_allows_at_least_six_attempts_over_several_minutes(tmp_path):
+    class Down:
+        calls = 0
+
+        def complete(self, req):
+            self.calls += 1
+            raise TransientProviderError("overloaded")
+
+    sleeps, down = [], Down()
+    with pytest.raises(TransientProviderError):
+        ModelClient(down, "live", tmp_path, sleep=sleeps.append).complete(REQ)
+    assert down.calls >= 6
+    assert 180 <= sum(sleeps) <= 600
+
+
+class RetryAfter:
+    def __init__(self, seconds):
+        self.seconds, self.calls = seconds, 0
+
+    def complete(self, req):
+        self.calls += 1
+        if self.calls == 1:
+            raise TransientProviderError("429", retry_after=self.seconds)
+        return RESP
+
+
+def test_retry_after_replaces_a_shorter_backoff(tmp_path):
+    sleeps = []
+    ModelClient(RetryAfter(90.0), "live", tmp_path, sleep=sleeps.append).complete(REQ)
+    assert sleeps == [90.0]
+
+
+def test_a_retry_after_shorter_than_the_backoff_does_not_shorten_it(tmp_path):
+    sleeps = []
+    ModelClient(RetryAfter(0.1), "live", tmp_path, sleep=sleeps.append).complete(REQ)
+    assert sleeps == [BACKOFF_BASE_SECONDS]
+
+
+def test_an_absurd_retry_after_is_capped(tmp_path):
+    sleeps = []
+    ModelClient(RetryAfter(86400.0), "live", tmp_path, sleep=sleeps.append).complete(REQ)
+    assert sleeps == [MAX_RETRY_WAIT_SECONDS]
+
+
 def test_non_transient_errors_are_not_retried(tmp_path):
     class Broken:
         calls = 0
@@ -148,7 +195,49 @@ def test_recording_file_is_deterministic_and_secret_free(tmp_path):
     data = json.loads(text)
     assert text == json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     assert data["response"]["tool_calls"][0]["arguments"] == {"sql": "select 1"}
+    assert data["response"]["stop_reason"] == "tool_use"
     assert "api_key" not in text.lower() and "x-api-key" not in text.lower()
+
+
+def test_recording_holds_the_key_response_model_and_metadata_only(tmp_path):
+    seeded(tmp_path)
+    text = (tmp_path / "ns" / f"{request_key(REQ)}.json").read_text(encoding="utf-8")
+    data = json.loads(text)
+    assert set(data) == {"key", "model", "response", "metadata"}
+    assert data["key"] == request_key(REQ) and data["model"] == "m1"
+    assert data["metadata"] == {"namespace": "ns", "message_count": 1, "tools": ["run_sql"],
+                                "tool_choice": None}
+    assert '"sys"' not in text and '"hi"' not in text
+
+
+def test_record_reuses_an_existing_recording_without_calling_the_api(tmp_path):
+    seeded(tmp_path)
+    path = tmp_path / "ns" / f"{request_key(REQ)}.json"
+    before = path.read_text(encoding="utf-8")
+    client = ModelClient(ExplodingProvider(), "record", tmp_path, namespace="ns")
+    assert client.complete(REQ) == RESP
+    assert client.tokens_used == 15  # a resumed run still counts what it replays
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_record_calls_the_api_for_a_request_it_has_not_seen(tmp_path):
+    seeded(tmp_path)
+    provider = FakeProvider()
+    other = ModelRequest("m1", "sys", [{"role": "user", "content": "bye"}], TOOLS, None)
+    ModelClient(provider, "record", tmp_path, namespace="ns").complete(other)
+    assert provider.calls == 1
+
+
+def test_a_failed_write_leaves_no_partial_recording(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    def failing_replace(self, target):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "replace", failing_replace)
+    with pytest.raises(OSError):
+        seeded(tmp_path)
+    assert not (tmp_path / "ns" / f"{request_key(REQ)}.json").exists()
 
 
 def test_client_from_env_defaults_to_replay_without_key(tmp_path, monkeypatch):
