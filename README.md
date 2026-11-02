@@ -66,7 +66,7 @@ The model client has three modes, set with `LEDGER_LLM_MODE`:
 
 A recording is keyed by a hash of the model, messages and tools, and holds that key, the model, the response and a little metadata, not the request. A request with no recording fails loudly with a missing-recording error. There is no fallback to a live call. Changing a prompt means re-recording.
 
-A replay proves that the pipeline, the verifier and the scoring work end to end and give the same answer every time. It does not prove how the agent behaves against the real model today, and it does not prove that a changed prompt still works. The weekly live workflow exists for that.
+A replay proves that the pipeline, the verifier and the scoring work end to end and give the same answer every time. It does not prove how the agent behaves against the real model today, and it does not prove that a changed prompt still works. The manually started live workflow exists for that.
 
 ## How it works
 
@@ -93,12 +93,12 @@ A run has a token limit, default 200,000 tokens, shared out as stage budgets: 30
 
 ### Cost of the live workflow
 
-`.github/workflows/live-evals.yml` runs weekly and on manual dispatch, with a `mode` input of `live` (the default) or `record`. `record` uploads `recordings/` as a workflow artifact for a person to review and commit. The workflow never commits anything. Its cost is bounded two ways:
+`.github/workflows/live-evals.yml` has no schedule and only runs when started by hand, with a `mode` input of `live` (the default) or `record`. `record` uploads `recordings/` as a workflow artifact for a person to review and commit. The workflow never commits anything. Its cost is bounded two ways:
 
 - `timeout-minutes: 45` stops the job.
 - Each audit stays near the 200,000 token limit, as its stage budgets force a submit before they run out, and each forced turn can run a little past. In `live` mode the agent and the ten eval scenarios each use a fresh client, so one run is capped at roughly 2.2 million tokens in total. `record` mode skips the `agent` service, as the evals record the same scenario, so it is capped at roughly 2 million.
 
-A scheduled run with no `ANTHROPIC_API_KEY` secret is skipped. A manual run without it fails.
+A run without the `ANTHROPIC_API_KEY` secret fails with a clear error.
 
 ## Limitations
 

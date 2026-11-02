@@ -118,7 +118,7 @@ def test_workflow_actions_are_pinned_to_major_versions():
 def test_live_evals_workflow():
     wf = _workflow("live-evals.yml")
     triggers = wf.get(True) or wf["on"]
-    assert "schedule" in triggers
+    assert set(triggers) == {"workflow_dispatch"}
     mode = triggers["workflow_dispatch"]["inputs"]["mode"]
     assert mode["type"] == "choice" and mode["options"] == ["live", "record"]
     assert mode["default"] == "live"
@@ -128,16 +128,6 @@ def test_live_evals_workflow():
     assert "timeout-minutes" in text
     assert "upload-artifact" in text and "recordings" in text
     assert "git commit" not in text and "git push" not in text
-
-
-def test_live_evals_skips_a_scheduled_run_without_the_secret():
-    job = _workflow("live-evals.yml")["jobs"]["evals"]
-    check = next(s for s in job["steps"] if s.get("id") == "key")
-    assert "secrets.ANTHROPIC_API_KEY != ''" in check["env"]["HAS_KEY"]
-    assert "GITHUB_EVENT_NAME" in check["run"] and "schedule" in check["run"]
-    assert "GITHUB_OUTPUT" in check["run"] and "exit 1" not in check["run"]
-    run = next(s for s in job["steps"] if "ANTHROPIC_API_KEY" in s.get("env", {}))
-    assert run["if"] == "steps.key.outputs.run == 'true'"
 
 
 def test_live_evals_record_mode_does_not_run_the_agent_service():

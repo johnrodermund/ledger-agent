@@ -703,7 +703,7 @@ git commit -m "feat: add agent eval suite and scoring"
 **Interfaces:**
 - Produces: the run command `docker compose up --build --abort-on-container-exit --exit-code-from evals`, with order `db`, then `seed`, then `agent`, then `evals`. `agent` uses scenario `dev-1` and writes to `./out`.
 - Produces: `ci.yml`, on push: tests, guardrail suite, replay evals, and a check that the `agent` service mounts no `keys` volume.
-- Produces: `live-evals.yml`, on a weekly schedule and manual dispatch: `LEDGER_LLM_MODE=live`, using secret `ANTHROPIC_API_KEY`. A `mode` input allows `record`, which uploads recordings as an artifact.
+- Produces: `live-evals.yml`, on manual dispatch only: `LEDGER_LLM_MODE=live`, using secret `ANTHROPIC_API_KEY`. A `mode` input allows `record`, which uploads recordings as an artifact.
 
 - [ ] **Step 1: Write the failing tests**
 

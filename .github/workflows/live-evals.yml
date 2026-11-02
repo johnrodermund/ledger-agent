@@ -1,10 +1,9 @@
 name: Live evals
 
-# Runs the evals against the real model. This costs money, so it is bounded by the
-# job timeout and by the per-run token limit (see the README). It never commits anything.
+# Runs the evals against the real model. This costs money, so it only starts by hand and
+# is bounded by the job timeout and the per-run token limit (see the README). It never
+# commits anything.
 on:
-  schedule:
-    - cron: "0 6 * * 1"
   workflow_dispatch:
     inputs:
       mode:
@@ -23,26 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      LEDGER_LLM_MODE: ${{ inputs.mode || 'live' }}
+      LEDGER_LLM_MODE: ${{ inputs.mode }}
     steps:
       - uses: actions/checkout@v4
       - name: Create .env from the test values
         run: cp .env.example .env
-      # A scheduled run without the secret has nothing to do. A manual run still reaches
-      # the next step, which fails loudly.
-      - name: Decide whether to run
-        id: key
-        env:
-          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-        run: |
-          if [ "$HAS_KEY" != "true" ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            echo "::notice::The ANTHROPIC_API_KEY secret is not set, so the scheduled run is skipped."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
       - name: Run the evals
-        if: steps.key.outputs.run == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |

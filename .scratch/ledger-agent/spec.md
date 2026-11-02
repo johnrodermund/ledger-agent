@@ -204,12 +204,12 @@ CI requires a 100% rejection rate on the guardrail suite from the start. Agent s
 - **Live** runs against the real model without recording, when a key is set.
 - Recordings are keyed by a hash of the model, messages and tools. Prompts must contain no timestamps or other run-specific values.
 - Changing a prompt means re-recording, and a missing recording fails loudly.
-- The README states that default runs are replays. Replays prove the pipeline and scoring, while the scheduled live run shows the score holds against the real model.
+- The README states that default runs are replays. Replays prove the pipeline and scoring, while a manually started live run shows the score holds against the real model.
 
 ## Delivery
 
 - **Run command:** a single Docker Compose command runs the agent and evals with no key.
-- **CI:** GitHub Actions runs tests and replay evals in Docker on every push. Live evals run weekly within a cost limit, using a repo secret.
+- **CI:** GitHub Actions runs tests and replay evals in Docker on every push. Live evals run only when started by hand, within a cost limit, using a repo secret.
 - **Tracing:** each run writes a JSON trace of steps and tokens.
 - **README:** results table first, then the graph diagram, the run command and a limitations section.
 - **Repo:** public `ledger-agent` under `johnrodermund`, MIT licensed. Creating the public repo needs explicit confirmation first.
