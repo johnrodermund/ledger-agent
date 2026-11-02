@@ -1,10 +1,13 @@
 """Shared data models for planted scenarios and their answer key."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+# GLJRNL amounts are numeric(14,2).
+MAX_AMOUNT = Decimal("999999999999.99")
 
 
 class FaultType(StrEnum):
@@ -90,3 +93,76 @@ class ScenarioSpec(BaseModel):
     faults: dict[FaultType, int]
     decoys: list[DecoyType]
     hostile_memo: bool = False
+
+
+class Finding(BaseModel):
+    """A problem the agent reports. Type other has no correction."""
+
+    finding_id: str
+    type: FaultType | Literal["other"]
+    summary: str
+    affected_rows: list[RowRef]
+    evidence_sql: str
+
+
+def _parse_amount(value: object) -> Decimal:
+    """An exact non-negative amount at 2 decimal places. Floats go through str, so
+    0.1 means 0.10. An amount that needs rounding is refused, never rounded."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str, Decimal)):
+        raise ValueError("amount must be a number")
+    try:
+        amount = Decimal(str(value))
+    except InvalidOperation as e:
+        raise ValueError("amount must be a number") from e
+    if not amount.is_finite():
+        raise ValueError("amount must be finite")
+    if amount < 0:
+        raise ValueError("amount must not be negative")
+    if amount > MAX_AMOUNT:
+        raise ValueError(f"amount must not exceed {MAX_AMOUNT}")
+    exact = amount.quantize(Decimal("0.01"))
+    if exact != amount:
+        raise ValueError("amount must have at most 2 decimal places")
+    return abs(exact)
+
+
+class CorrectionLine(BaseModel):
+    """One journal line. acct_cd is normalised to the stored 8-character form."""
+
+    acct_cd: str
+    dr_amt: Decimal
+    cr_amt: Decimal
+    prd_id: int
+
+    @field_validator("acct_cd")
+    @classmethod
+    def _pad_account(cls, value: str) -> str:
+        return value.rstrip().ljust(8)
+
+    @field_validator("dr_amt", "cr_amt", mode="before")
+    @classmethod
+    def _exact_amount(cls, value: object) -> Decimal:
+        return _parse_amount(value)
+
+    @model_validator(mode="after")
+    def _one_side(self) -> "CorrectionLine":
+        if self.dr_amt and self.cr_amt:
+            raise ValueError("a line cannot have both a debit and a credit")
+        if not self.dr_amt and not self.cr_amt:
+            raise ValueError("a line needs a debit or a credit")
+        return self
+
+
+class StatusChange(BaseModel):
+    inv_id: int
+    new_status: Literal["V"]
+
+
+class Correction(BaseModel):
+    """A proposed fix: journal lines referencing corrects_jrnl_no, status changes,
+    or both."""
+
+    corrects_jrnl_no: int | None
+    lines: list[CorrectionLine]
+    status_changes: list[StatusChange]
+    reasoning: str
