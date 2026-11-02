@@ -13,6 +13,7 @@ from ledger_agent.agent.prompts import (
     FINDING_TYPES,
     HUNT_START,
     HUNT_SYSTEM,
+    PROPOSE_INVOICE,
     PROPOSE_JOURNAL,
     PROPOSE_PROMPT,
     PROPOSE_RETRY,
@@ -42,6 +43,9 @@ MAX_TARGET_JOURNALS = 5  # a grouped finding could cite many; a correction targe
 JOURNAL_HEADER_SQL = (
     'SELECT "JRNL_NO", "PRD_ID", "POST_DT", "POST_FLG", "REF_JRNL_NO", "SRC_CD", "SRC_REF", '
     '"MEMO" FROM "GLJRNH" WHERE "JRNL_NO" = {key} ORDER BY "JRNL_NO"')
+INVOICE_SQL = (
+    'SELECT "INV_ID", "VEND_CD", "INV_NO", "INV_DT", "INV_AMT", "STAT_CD", "JRNL_NO" '
+    'FROM "APINVH" WHERE "INV_ID" = {key} ORDER BY "INV_ID"')
 JOURNAL_LINES_SQL = (
     'SELECT "ACCT_CD", "DR_AMT", "CR_AMT", "LN_SEQ" FROM "GLJRNL" WHERE "JRNL_NO" = {key} '
     'ORDER BY "LN_SEQ"')
@@ -137,7 +141,7 @@ def hunt(state: AgentState, deps: Deps) -> dict[str, Any]:
         token_budget=deps.limits.hunt_tokens,
     )
     submitted = result.submitted.get("findings", [])
-    if not isinstance(submitted, list):
+    if not isinstance(submitted, list):  # the loop refuses one, so only an empty result
         submitted = []
     findings: list[Finding] = []
     dropped = list(state["dropped"])
@@ -314,11 +318,20 @@ def pick(state: AgentState, deps: Deps) -> dict[str, Any]:
 
 
 def _journals_text(dbname: str, finding: Finding) -> str:
-    """Header and lines of each journal the finding cites by its GLJRNH rows, in the
-    order cited. Empty if it cites none that exist. The propose stage has no SQL tool,
-    so code fetches this through the read-only tool."""
+    """Each invoice the finding cites by its APINVH rows, then header and lines of each
+    journal it cites by its GLJRNH rows and of each journal that recorded a cited invoice,
+    in the order cited. Empty if it cites none that exist. The propose stage has no SQL
+    tool, so code fetches this through the read-only tool."""
     cited = [row.key for row in finding.affected_rows if row.table == "GLJRNH"]
     parts = []
+    invoices = [row.key for row in finding.affected_rows if row.table == "APINVH"]
+    for key in invoices[:MAX_TARGET_JOURNALS]:
+        invoice = run_query(dbname, INVOICE_SQL.format(key=key))
+        if invoice.rows:
+            parts.append(PROPOSE_INVOICE.format(inv_id=key, invoice=format_query_result(invoice)))
+            jrnl = invoice.rows[0][invoice.columns.index("JRNL_NO")]
+            if jrnl.lstrip("-").isdigit() and int(jrnl) not in cited:
+                cited.append(int(jrnl))
     for key in cited[:MAX_TARGET_JOURNALS]:
         header = run_query(dbname, JOURNAL_HEADER_SQL.format(key=key))
         if header.rows:

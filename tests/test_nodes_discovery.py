@@ -337,10 +337,10 @@ def test_explore_stores_notes(db, tmp_path):
 
 def test_limits_split_the_token_limit_between_stages():
     limits = Limits()
-    assert limits.tokens == 200_000
+    assert limits.tokens == 250_000
     assert (limits.explore_tokens, limits.hunt_tokens, limits.propose_tokens) == (
-        60_000, 100_000, 40_000)
-    assert Limits(tokens=1000).hunt_tokens == 500
+        75_000, 100_000, 75_000)
+    assert Limits(tokens=1000).hunt_tokens == 400
 
 
 def test_explore_keeps_notes_when_its_token_budget_runs_out(db, tmp_path):
@@ -480,3 +480,15 @@ def test_a_query_run_in_the_submitting_turn_is_not_counted_as_seen(db, tmp_path)
     client, _ = make_client(tmp_path, [reply(sql_call(GOOD_SQL), notes_call())])
     result = loop(client, db)
     assert result.submitted == {"notes": "notes"} and result.tool_results == []
+
+
+def test_loop_sends_a_field_of_the_wrong_type_back_to_the_model(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(call("submit_findings", "f1", findings='[{"type": "other"')),
+        reply(findings_call()),
+    ])
+    result = run_tool_loop(client, "sys", [{"role": "user", "content": "go"}], 5,
+                           SUBMIT_FINDINGS_TOOL, db)
+    assert result.submitted == {"findings": []}
+    (res,) = tool_results(provider.requests[1])
+    assert res["is_error"] and "findings must be a JSON array" in res["content"]

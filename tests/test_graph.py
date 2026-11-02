@@ -271,7 +271,7 @@ def test_propose_prompt_lists_open_periods_and_active_accounts_in_order(db, faul
 
 
 def test_propose_prompt_omits_the_journal_when_no_header_row_is_cited(db, fault, tmp_path):
-    item = finding_item(fault) | {"affected_rows": [{"table": "APINVH", "key": 1}]}
+    item = finding_item(fault) | {"affected_rows": [{"table": "APPAYM", "key": 1}]}
     prompt = propose_prompt(db, fault, tmp_path, item)
     assert "Journal " not in prompt.split("Evidence query result")[1].split("Open periods")[0]
     assert "Open periods" in prompt and "Active accounts" in prompt
@@ -306,7 +306,7 @@ def test_token_limit_stops_and_reports_partial(db, fault, tmp_path):
 def test_propose_stops_at_its_own_budget_and_keeps_earlier_findings(db, fault, tmp_path):
     second = finding_item(fault) | {
         "summary": "second", "affected_rows": [{"table": "APINVH", "key": 1}]}
-    good = reply(call("submit_correction", "p1", **true_args(fault)), tokens=200)
+    good = reply(call("submit_correction", "p1", **true_args(fault)), tokens=300)
     result, provider = run(db, tmp_path, [
         *discovery(finding_item(fault), second), good], Limits(tokens=1000))
     assert [o.status for o in result.state["outcomes"]] == ["verified", "needs_human"]
@@ -479,3 +479,16 @@ def test_the_propose_prompt_counts_as_shown_to_the_model(db, fault, tmp_path):
     result, provider = run(db, tmp_path, [
         *discovery(finding_item(fault)), propose_reply(true_args(fault))])
     assert provider.requests[-1].messages[0]["content"] in result.state["tool_results"]
+
+
+def test_propose_prompt_carries_a_cited_invoice_and_the_journal_that_recorded_it(
+        db, fault, tmp_path):
+    with connect_admin(db) as c:
+        inv_id, inv_no, jrnl = c.execute(
+            'SELECT "INV_ID", "INV_NO", "JRNL_NO" FROM "APINVH" ORDER BY 1 LIMIT 1').fetchone()
+    item = finding_item(fault) | {
+        "affected_rows": [{"table": "APINVH", "key": inv_id}],
+        "evidence_sql": f'SELECT "INV_ID" FROM "APINVH" WHERE "INV_ID" = {inv_id}'}
+    prompt = propose_prompt(db, fault, tmp_path, item)
+    assert f"Invoice {inv_id}" in prompt and inv_no in prompt
+    assert f"Journal {jrnl} header" in prompt

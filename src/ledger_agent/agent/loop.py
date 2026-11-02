@@ -47,6 +47,20 @@ def format_query_result(result: QueryResult) -> str:
     )
 
 
+_JSON_TYPES = {"array": list, "object": dict, "string": str}
+
+
+def _mistyped(arguments: dict, properties: dict) -> str | None:
+    """The first top-level field whose JSON type is wrong, described for the model. A
+    model can send a nested array as JSON text, which would otherwise pass unnoticed."""
+    for name, schema in properties.items():
+        expected = _JSON_TYPES.get(schema.get("type"))
+        if name in arguments and expected and not isinstance(arguments[name], expected):
+            return (f"{name} must be a JSON {schema['type']}, not "
+                    f"{type(arguments[name]).__name__}; send it as JSON, not as text")
+    return None
+
+
 def run_tool_loop(
     client: ModelClient,
     system: str,
@@ -62,6 +76,7 @@ def run_tool_loop(
     msgs = list(messages)
     submit_name = submit_schema["name"]
     required = submit_schema.get("input_schema", {}).get("required", [])
+    properties = submit_schema.get("input_schema", {}).get("properties", {})
     used = 0
     limit_hit = False
     limit_kind: str | None = None
@@ -111,10 +126,14 @@ def run_tool_loop(
                 results.append((call.id, CUT_OFF, True))
             elif call.name == submit_name:
                 missing = [k for k in required if k not in call.arguments]
+                mistyped = _mistyped(call.arguments, properties)
                 if submitted is not None:
                     results.append((call.id, "already submitted", True))
                 elif missing:
                     problem = f"The submission is missing required fields: {', '.join(missing)}."
+                    results.append((call.id, problem, True))
+                elif mistyped:
+                    problem = f"The submission is invalid: {mistyped}."
                     results.append((call.id, problem, True))
                 else:
                     submitted = call.arguments

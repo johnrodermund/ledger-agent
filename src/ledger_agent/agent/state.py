@@ -16,7 +16,7 @@ class Limits:
     explore_queries: int = 15
     hunt_queries: int = 40
     fix_attempts: int = 3
-    tokens: int = 200_000
+    tokens: int = 250_000
 
     # Stage budgets are shares of tokens, each measured from the start of its stage.
     @property
@@ -25,11 +25,11 @@ class Limits:
 
     @property
     def hunt_tokens(self) -> int:
-        return self.tokens * 50 // 100
+        return self.tokens * 40 // 100
 
     @property
     def propose_tokens(self) -> int:
-        return self.tokens * 20 // 100
+        return self.tokens * 30 // 100
 
 
 class DroppedFinding(BaseModel):
