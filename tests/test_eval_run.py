@@ -67,6 +67,13 @@ def test_every_scenario_builds(spec):
     assert (HOSTILE_MEMO in memos) == spec.hostile_memo
 
 
+def test_load_scenarios_turns_bad_yaml_into_a_value_error(tmp_path):
+    path = tmp_path / "s.yaml"
+    path.write_text("- {id: [", encoding="utf-8")
+    with pytest.raises(ValueError, match="s.yaml"):
+        load_scenarios(path)
+
+
 def test_load_scenarios_rejects_a_repeated_id(tmp_path):
     entry = "- {id: a, split: dev, seed: 1, faults: {}, decoys: []}\n"
     path = tmp_path / "s.yaml"
@@ -119,6 +126,16 @@ def test_seed_command_needs_exactly_one_source(argv):
     assert exc.value.code != 0
 
 
+def test_seed_command_reports_a_bad_scenarios_file(tmp_path, monkeypatch, capsys):
+    def unreadable():
+        raise ValueError("cannot parse s.yaml")
+
+    monkeypatch.setattr("ledger_evals.scenarios.load_scenarios", unreadable)
+    code = cli_main(["seed", "--scenario", "dev-1", "--db", "x", "--key-out", str(tmp_path / "k")])
+    assert code == 1
+    assert "s.yaml" in capsys.readouterr().err
+
+
 def test_cli_does_not_import_evals_at_startup():
     source = Path(cli_main.__code__.co_filename).read_text(encoding="utf-8")
     assert not any(line.startswith(("from ledger_evals", "import ledger_evals"))
@@ -140,6 +157,14 @@ def test_check_thresholds_compares_in_the_right_direction():
 
 def test_check_thresholds_treats_an_undefined_metric_as_missed():
     assert len(check_thresholds(aggregate([]), {"precision": 0.5})) == 1
+
+
+def test_check_thresholds_treats_an_incomplete_scenario_as_missed():
+    total = aggregate([]).model_copy(update={
+        "faults_by_type": {"unbalanced_journal": 1}, "detected_by_type": {"unbalanced_journal": 1},
+        "incomplete_scenarios": 2})
+    [message] = check_thresholds(total, {"recall": 0.5})
+    assert "2" in message and "incomplete" in message
 
 
 def test_check_thresholds_refuses_an_unknown_metric():
@@ -207,26 +232,50 @@ def read_results(out):
 
 def test_runner_end_to_end_with_fake_provider(tmp_path, fake_clients, capsys):
     scripts, built = fake_clients
-    scripts["holdout-2"] = script_for(BY_ID["holdout-2"])
-    code, out = invoke(tmp_path, "--scenario", "holdout-2")
+    for spec in split("holdout"):
+        scripts[spec.id] = script_for(spec)
+    code, out = invoke(tmp_path, "--split", "holdout")
     assert code == 0
     assert "No thresholds set" in capsys.readouterr().out
 
     results = read_results(out)
     assert results["llm_mode"] == "live"
-    [entry] = results["scenarios"]
-    assert entry["id"] == "holdout-2"
+    entry = next(e for e in results["scenarios"] if e["id"] == "holdout-2")
     assert entry["score"]["recall"] == 1.0
     assert entry["score"]["fix_validity"] == 1.0
     assert entry["score"]["verified_but_wrong"] == 0
     assert entry["score"]["decoy_false_alarm_rate"] == 0.0
     assert results["headline"]["label"] == "Holdout aggregate"
+    assert results["headline"]["incomplete_scenarios"] == 0
 
     md = (out / "results.md").read_text(encoding="utf-8")
     assert md.index("Holdout aggregate") < md.index("Recall by fault type") \
         < md.index("Misses by scenario")
-    assert "live" in md and "Verified but wrong" in md
-    assert [c.namespace for c in built] == ["holdout-2"]
+    assert "live" in md and "Verified but wrong" in md and "Incomplete scenarios" in md
+    assert [c.namespace for c in built] == ["holdout-1", "holdout-2", "holdout-3"]
+
+
+def test_one_holdout_scenario_is_not_labelled_the_holdout_aggregate(tmp_path, fake_clients):
+    scripts, _ = fake_clients
+    scripts["holdout-2"] = script_for(BY_ID["holdout-2"])
+    code, out = invoke(tmp_path, "--scenario", "holdout-2")
+    assert code == 0
+    assert read_results(out)["headline"]["label"] != "Holdout aggregate"
+    assert "Holdout aggregate" not in (out / "results.md").read_text(encoding="utf-8")
+
+
+def test_incomplete_scenarios_reach_the_headline_and_miss_thresholds(tmp_path, fake_clients):
+    scripts, _ = fake_clients
+    script = script_for(BY_ID["dev-2"])
+    good = script[1].tool_calls[0].arguments["findings"]
+    script[1].tool_calls[0].arguments["findings"] = [
+        *good, {"type": "other", "summary": "x", "affected_rows": [], "evidence_sql": "SELEC"}]
+    scripts["dev-2"] = script
+    code, out = invoke(tmp_path, "--scenario", "dev-2",
+                       thresholds=thresholds_file(tmp_path, {"recall": 0.5}))
+    assert code != 0
+    assert read_results(out)["headline"]["incomplete_scenarios"] == 1
+    assert "incomplete" in (out / "results.md").read_text(encoding="utf-8")
 
 
 def test_results_show_misses_and_label_a_non_holdout_run(tmp_path, fake_clients):
@@ -277,9 +326,11 @@ def test_injection_recall_drop_shows_as_failed(tmp_path, fake_clients):
     scripts, _ = fake_clients
     scripts["dev-1"] = script_for(BY_ID["dev-1"])
     scripts["injection-1"] = script_for(BY_ID["injection-1"], recall_all=False)
-    _, out = invoke(tmp_path, "--split", "injection")
+    code, out = invoke(tmp_path, "--split", "injection")
+    assert code != 0
     entries = {e["id"]: e for e in read_results(out)["scenarios"]}
     assert entries["injection-1"]["score"]["injection_passed"] is False
+    assert "FAILED" in (out / "results.md").read_text(encoding="utf-8")
 
 
 def test_runner_fails_on_missed_threshold(tmp_path, fake_clients, capsys):
@@ -333,6 +384,38 @@ def test_unknown_scenario_is_refused(tmp_path, capsys):
     code, _ = invoke(tmp_path, "--scenario", "nope")
     assert code != 0
     assert "nope" in capsys.readouterr().err
+
+
+def test_split_or_scenario_is_required(tmp_path):
+    with pytest.raises(SystemExit) as exc:
+        main(["--out", str(tmp_path / "out")])
+    assert exc.value.code != 0
+
+
+def test_invalid_arguments_leave_earlier_results_in_place(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "results.json").write_text("{}", encoding="utf-8")
+    code, _ = invoke(tmp_path, "--scenario", "nope")
+    assert code != 0
+    assert (out / "results.json").exists()
+
+
+def test_a_selection_with_no_scenarios_is_a_clean_error(tmp_path, capsys):
+    path = tmp_path / "s.yaml"
+    path.write_text("- {id: a, split: dev, seed: 1, faults: {}, decoys: []}\n", encoding="utf-8")
+    code, _ = invoke(tmp_path, "--split", "holdout", "--scenarios", str(path))
+    assert code != 0
+    assert "no scenarios" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("text", ["- {id: [", ""], ids=["bad-yaml", "empty"])
+def test_a_bad_scenarios_file_is_a_clean_error(tmp_path, capsys, text):
+    path = tmp_path / "s.yaml"
+    path.write_text(text, encoding="utf-8")
+    code, _ = invoke(tmp_path, "--split", "dev", "--scenarios", str(path))
+    assert code != 0
+    assert capsys.readouterr().err.startswith("error:")
 
 
 def test_injection_without_a_plain_variant_fails_clearly(tmp_path, capsys):

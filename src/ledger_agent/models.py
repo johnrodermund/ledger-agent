@@ -56,7 +56,10 @@ class PlantedFault(BaseModel):
     with an explicit zero where the position must clear, and any account it omits
     must net to zero.
 
-    expected_status maps INV_ID to the STAT_CD a correction must set.
+    expected_status maps INV_ID to the STAT_CD a correction must set, and is every
+    status change a correction may make.
+
+    open_periods lists the PRD_IDs a correction may post to.
     """
 
     fault_id: str
@@ -64,6 +67,7 @@ class PlantedFault(BaseModel):
     rows: list[RowRef]
     original_lines: list[KeyLine]
     expected_net: dict[str, Decimal]
+    open_periods: list[int]
     expected_status: dict[int, str] = {}
 
 

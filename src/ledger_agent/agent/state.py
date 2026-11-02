@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 from typing_extensions import TypedDict
@@ -68,6 +68,7 @@ class AgentState(TypedDict):
     evidence: dict[str, Evidence]
     proposal: Correction | None
     rejected: list[Correction]  # every correction the verifier refused, in order
+    malformed: list[dict[str, Any]]  # raw arguments of submissions that failed validation
     queries: int
 
 

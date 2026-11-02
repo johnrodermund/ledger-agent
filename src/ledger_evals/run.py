@@ -1,12 +1,13 @@
 """Run the agent across the eval scenarios and score it against each answer key.
 
-python -m ledger_evals.run [--split dev|holdout|injection|all | --scenario ID] --out DIR
+python -m ledger_evals.run (--split dev|holdout|injection|all | --scenario ID) --out DIR
 
 Each scenario loads into its own database and records under its own namespace, with
 a fresh client, because the token budget compares against a client's lifetime total.
 A scenario that fails aborts the run and nothing is written: a failure is never
 scored. Thresholds are checked against the headline aggregate, which is holdout when
-holdout ran, and a metric with no value counts as missed.
+all of holdout ran. When thresholds are set, a metric with no value and an incomplete
+scenario each count as missed. A failed injection check exits non-zero regardless.
 """
 
 from __future__ import annotations
@@ -23,7 +24,6 @@ from ledger_agent.erp.faults import build_scenario
 from ledger_agent.erp.load import load
 from ledger_agent.llm.client import DEFAULT_MODEL, client_from_env
 from ledger_agent.models import AnswerKey, ScenarioSpec
-from ledger_agent.report import incomplete_reasons
 from ledger_evals.scenarios import SCENARIOS_PATH, load_scenarios
 from ledger_evals.score import ScenarioScore, Tally, aggregate, score
 
@@ -80,6 +80,8 @@ def select(specs: list[ScenarioSpec], split: str, scenario: str | None
             raise ValueError(f"unknown scenario {scenario}")
     else:
         requested = [s for s in specs if split in ("all", s.split)]
+    if not requested:
+        raise ValueError(f"no scenarios in split {split}")
     extra: list[ScenarioSpec] = []
     for spec in requested:
         if spec.hostile_memo:
@@ -99,6 +101,8 @@ def check_thresholds(total: Tally, thresholds: dict[str, float]) -> list[str]:
     """One message for each threshold missed."""
     _validate_thresholds(thresholds)
     missed = []
+    if thresholds and total.incomplete_scenarios:
+        missed.append(f"{total.incomplete_scenarios} scenario(s) incomplete")
     for metric, bound in thresholds.items():
         value = getattr(total, metric)
         lower = metric in LOWER_IS_BETTER
@@ -120,13 +124,18 @@ def _score_all(runs: list[ScenarioRun], specs: list[ScenarioSpec]) -> dict[str, 
     return scores
 
 
-def summarise(scores: dict[str, ScenarioScore], requested: list[ScenarioSpec]) -> Summary:
-    """Aggregates cover what was asked for, so a supporting plain variant adds nothing."""
+def summarise(scores: dict[str, ScenarioScore], requested: list[ScenarioSpec],
+              specs: list[ScenarioSpec]) -> Summary:
+    """Aggregates cover what was asked for, so a supporting plain variant adds nothing.
+    Only the whole holdout split is the holdout aggregate."""
     aggregates = {name: aggregate(scores[s.id] for s in requested if s.split == name)
                   for name in SPLITS if any(s.split == name for s in requested)}
-    if "holdout" in aggregates:
+    holdout = [s for s in specs if s.split == "holdout"]
+    if "holdout" in aggregates and all(s in requested for s in holdout):
         return Summary("Holdout aggregate", aggregates["holdout"], aggregates)
-    return Summary(f"Aggregate of {', '.join(aggregates)} (not holdout)",
+    names = ", ".join(aggregates)
+    qualifier = "partial holdout" if "holdout" in aggregates else "not holdout"
+    return Summary(f"Aggregate of {names} ({qualifier})",
                    aggregate(scores[s.id] for s in requested), aggregates)
 
 
@@ -140,7 +149,6 @@ def build_results(runs: list[ScenarioRun], scores: dict[str, ScenarioScore],
         "aggregates": {name: t.model_dump(mode="json") for name, t in summary.aggregates.items()},
         "scenarios": [
             {"id": run.spec.id, "split": run.spec.split, "requested": run.spec in requested,
-             "incomplete": incomplete_reasons(run.result),
              "score": scores[run.spec.id].model_dump(mode="json")}
             for run in runs],
         "thresholds": {"set": thresholds, "missed": missed},
@@ -160,9 +168,10 @@ def _metric_rows(t: Tally) -> list[str]:
         f"| Decoy false alarm rate | {_percent(t.decoys_alarmed, t.decoys)} |",
         f"| Fix validity | {_percent(t.valid_fixes, t.verified_matched)} |",
         f"| Verified but wrong | {t.verified_but_wrong} |",
-        f"| Verified fixes for findings matching no fault | {t.verified_unmatched} |",
-        f"| End-to-end fix rate | {_percent(t.fixed_faults, planted)} |",
+        f"| Verified fixes for findings credited to no fault | {t.verified_unmatched} |",
+        f"| End-to-end fix rate | {_percent(t.valid_fixes, planted)} |",
         f"| Needs human rate | {_percent(t.needs_human, t.outcomes)} |",
+        f"| Incomplete scenarios | {t.incomplete_scenarios} |",
         f"| Tokens | {t.tokens} |",
         f"| Cost (USD) | {t.cost_usd:.4f} |",
         f"| Queries | {t.queries} |",
@@ -187,10 +196,9 @@ def _misses(run: ScenarioRun, one: ScenarioScore) -> list[str]:
     if one.wrong_fixes:
         lines.append(f"- Verified but wrong: {', '.join(one.wrong_fixes)}")
     if one.unmatched_findings:
-        lines.append(f"- Findings matching no fault: {', '.join(one.unmatched_findings)}")
-    reasons = incomplete_reasons(run.result)
-    if reasons:
-        lines.append(f"- Audit incomplete: {'; '.join(reasons)}")
+        lines.append(f"- Findings credited to no fault: {', '.join(one.unmatched_findings)}")
+    if one.incomplete:
+        lines.append(f"- Audit incomplete: {'; '.join(one.incomplete)}")
     return lines or ["- None."]
 
 
@@ -199,7 +207,8 @@ def render_markdown(runs: list[ScenarioRun], scores: dict[str, ScenarioScore],
     md = ["# LedgerAgent eval results", "",
           f"LLM mode: {runs[0].llm_mode}. Model: {DEFAULT_MODEL}.", "",
           f"## {summary.label}", "", *_metric_rows(summary.headline), "",
-          "Fix validity is over matched findings with a verified outcome. Verified but wrong "
+          "Each fault credits one finding at most, and a surplus finding counts as incorrect. "
+          "Fix validity is over credited findings with a verified outcome. Verified but wrong "
           "counts fixes the verifier accepted that the answer key refuses. The end-to-end fix "
           "rate is planted faults with a valid fix, over all planted faults.", "",
           "## Recall by fault type", "", f"{summary.label}:", "",
@@ -218,7 +227,7 @@ def render_markdown(runs: list[ScenarioRun], scores: dict[str, ScenarioScore],
 
     if len(summary.aggregates) > 1:
         for name, tally in summary.aggregates.items():
-            if name != "holdout":
+            if tally is not summary.headline:
                 md += [f"## {name.capitalize()} split", "", *_metric_rows(tally), ""]
 
     md += ["## Thresholds", ""]
@@ -228,17 +237,14 @@ def render_markdown(runs: list[ScenarioRun], scores: dict[str, ScenarioScore],
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ledger-evals")
-    which = parser.add_mutually_exclusive_group()
-    which.add_argument("--split", choices=[*SPLITS, "all"], default="all")
+    which = parser.add_mutually_exclusive_group(required=True)
+    which.add_argument("--split", choices=[*SPLITS, "all"])
     which.add_argument("--scenario", help="run one scenario by id")
     parser.add_argument("--out", type=Path, required=True, help="results output directory")
     parser.add_argument("--scenarios", type=Path, default=SCENARIOS_PATH)
     parser.add_argument("--thresholds", type=Path, default=THRESHOLDS_PATH)
     args = parser.parse_args(argv)
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    for name in ("results.json", "results.md"):
-        (args.out / name).unlink(missing_ok=True)  # an abort must not leave old results
     try:
         specs = load_scenarios(args.scenarios)
         thresholds = json.loads(args.thresholds.read_text(encoding="utf-8"))
@@ -247,6 +253,10 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as e:
         print(f"error: {' '.join(str(e).split())}", file=sys.stderr)
         return 1
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    for name in ("results.json", "results.md"):
+        (args.out / name).unlink(missing_ok=True)  # an abort must not leave old results
 
     runs: list[ScenarioRun] = []
     for spec in sorted([*extra, *requested], key=lambda s: s.hostile_memo):
@@ -259,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     scores = _score_all(runs, specs)
-    summary = summarise(scores, requested)
+    summary = summarise(scores, requested, specs)
     missed = check_thresholds(summary.headline, thresholds)
     results = build_results(runs, scores, requested, summary, thresholds, missed)
     (args.out / "results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
@@ -271,7 +281,10 @@ def main(argv: list[str] | None = None) -> int:
         print("No thresholds set")
     for message in missed:
         print(f"Threshold missed: {message}")
-    return 1 if missed else 0
+    failed_injections = [sid for sid, one in scores.items() if one.injection_passed is False]
+    for sid in failed_injections:
+        print(f"Injection check failed: {sid}")
+    return 1 if missed or failed_injections else 0
 
 
 if __name__ == "__main__":

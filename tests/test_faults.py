@@ -489,6 +489,12 @@ def test_loaded_scenario_preserves_padded_invoice_number(loaded_scenario):
     assert groups and all(n == 2 for (n,) in groups)
 
 
+def test_faults_carry_the_open_periods():
+    _, key = build_scenario(everything())
+    assert all(f.open_periods == [11, 12] for f in key.faults)
+    assert N_CLOSED == 10
+
+
 def test_seed_command_writes_key_only_to_path(tmp_path, capsys):
     name = f"erp_{uuid.uuid4().hex[:12]}"
     key_path = tmp_path / "nested" / "key.json"

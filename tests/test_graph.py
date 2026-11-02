@@ -124,6 +124,32 @@ def test_rejected_corrections_are_kept_in_order(db, fault, tmp_path):
     assert len(gave_up.state["rejected"]) == 3
 
 
+def test_malformed_proposals_are_kept_even_when_a_retry_succeeds(db, fault, tmp_path):
+    raw = {"lines": [{"acct_cd": "ZZ99"}], "reasoning": "oops"}
+    result, _ = run(db, tmp_path, [
+        *discovery(finding_item(fault)),
+        reply(call("submit_correction", "p1", **raw)), propose_reply(true_args(fault))])
+    assert result.state["malformed"] == [raw]
+    assert result.state["outcomes"][0].status == "verified"
+
+
+def test_malformed_proposals_are_kept_when_the_retry_fails(db, fault, tmp_path):
+    raw = {"lines": "ZZ99", "reasoning": "oops"}
+    result, _ = run(db, tmp_path, [
+        *discovery(finding_item(fault)),
+        reply(call("submit_correction", "p1", **raw)), reply(call("submit_correction", "p2", **raw))])
+    assert result.state["malformed"] == [raw, raw]
+
+
+def test_malformed_proposal_is_kept_when_the_token_limit_stops_the_retry(db, fault, tmp_path):
+    raw = {"lines": "ZZ99", "reasoning": "oops"}
+    result, _ = run(db, tmp_path, [
+        *discovery(finding_item(fault)),
+        reply(call("submit_correction", "p1", **raw), tokens=100)], Limits(tokens=100))
+    assert result.state["malformed"] == [raw]
+    assert "tokens" in result.state["limits_hit"]
+
+
 def test_audit_splits_tokens_for_this_run_only(db, tmp_path):
     earlier = ModelResponse(text="", input_tokens=3, output_tokens=2)
     notes, findings = discovery(tokens=5)

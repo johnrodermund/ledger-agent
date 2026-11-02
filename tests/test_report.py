@@ -26,7 +26,7 @@ def make_result(outcomes=(), findings=(), dropped=(), limits_hit=()):
         "queue": [], "current": None, "attempt": 0, "last_failure": None,
         "outcomes": list(outcomes), "limits_hit": list(limits_hit),
         "evidence": {f.finding_id: Evidence(columns=["JRNL_NO"], rows=[["7"]]) for f in findings},
-        "proposal": None, "rejected": [], "queries": 3,
+        "proposal": None, "rejected": [], "malformed": [], "queries": 3,
     }
     return AuditResult(state=state, trace=[
         TraceEvent(node="explore", tokens=10, queries=3, attempt=0)], tokens=10, input_tokens=7, output_tokens=3,

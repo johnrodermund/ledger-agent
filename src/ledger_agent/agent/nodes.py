@@ -219,11 +219,13 @@ def _parse_correction(resp: Any) -> tuple[Correction | None, str | None]:
 
 
 def _request_correction(
-    client: ModelClient, system: str, prompt: str, token_limit: int
+    client: ModelClient, system: str, prompt: str, token_limit: int,
+    malformed: list[dict[str, Any]],
 ) -> tuple[Correction | None, str | None]:
     """One model call, plus one retry carrying the validation error if the reply is
     malformed. A second failure returns (None, error). Raises _TokenLimit when the
-    budget runs out before the retry. This is not a fix attempt."""
+    budget runs out before the retry. This is not a fix attempt. Submissions that fail
+    validation are added to malformed, so they stay on record however this ends."""
     tools = [SUBMIT_CORRECTION_TOOL]
     msgs: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
     problem = ""
@@ -235,6 +237,8 @@ def _request_correction(
         if correction is not None:
             return correction, None
         problem = error or ""
+        malformed.extend(c.arguments for c in resp.tool_calls
+                         if c.name == SUBMIT_CORRECTION_TOOL["name"])
         note = {"type": "text", "text": f"{problem} Respond by calling the "
                 f"`{SUBMIT_CORRECTION_TOOL['name']}` tool with a valid correction."}
         assistant = assistant_message(resp)
@@ -309,16 +313,19 @@ def propose(state: AgentState, deps: Deps) -> dict[str, Any]:
             reason="no correction is proposed for a finding of type other"))
     if deps.client.tokens_used >= deps.limits.tokens:
         return _stop_for_tokens(state)
+    malformed: list[dict[str, Any]] = []
     try:
         correction, problem = _request_correction(
-            deps.client, PROPOSE_SYSTEM, _propose_prompt(state, finding), deps.limits.tokens)
+            deps.client, PROPOSE_SYSTEM, _propose_prompt(state, finding), deps.limits.tokens,
+            malformed)
     except _TokenLimit:
-        return _stop_for_tokens(state)
+        return _stop_for_tokens(state) | {"malformed": [*state["malformed"], *malformed]}
+    kept = {"malformed": [*state["malformed"], *malformed]}
     if correction is None:
         return _end_finding(state, Outcome(
             finding_id=finding.finding_id, status="needs_human", attempts=state["attempt"],
-            reason=f"the model did not produce a valid correction: {problem}"))
-    return {"proposal": correction}
+            reason=f"the model did not produce a valid correction: {problem}")) | kept
+    return {"proposal": correction} | kept
 
 
 def _next_jrnl_no(dbname: str) -> int:

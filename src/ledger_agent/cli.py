@@ -30,7 +30,11 @@ def _seed(args: argparse.Namespace) -> int:
         spec = ScenarioSpec(id=f"seed-{args.seed}", split="dev", seed=args.seed,
                             faults={t: 1 for t in FaultType}, decoys=list(DecoyType))
     else:
-        spec = _named_scenario(args.scenario)
+        try:
+            spec = _named_scenario(args.scenario)
+        except (OSError, ValueError) as e:
+            print(f"error: {' '.join(str(e).split())}", file=sys.stderr)
+            return 1
         if spec is None:
             print(f"error: unknown scenario {args.scenario}", file=sys.stderr)
             return 1
