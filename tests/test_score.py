@@ -101,7 +101,7 @@ def audit_result(findings=(), outcomes=(), dropped=(), rejected=(), malformed=()
         "dbname": "x", "schema_notes": "", "findings": list(findings), "dropped": list(dropped),
         "queue": [], "current": None, "attempt": 0, "last_failure": None,
         "outcomes": list(outcomes), "limits_hit": list(limits_hit), "evidence": {},
-        "proposal": None, "queries": queries, "rejected": list(rejected),
+        "proposal": None, "queries": queries, "propose_base": 0, "rejected": list(rejected),
         "malformed": list(malformed),
     }
     return AuditResult(state=state, trace=[], tokens=input_tokens + output_tokens,

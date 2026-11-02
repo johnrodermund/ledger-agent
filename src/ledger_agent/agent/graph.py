@@ -74,7 +74,7 @@ def initial_state(dbname: str) -> AgentState:
         "dbname": dbname, "schema_notes": "", "findings": [], "dropped": [], "queue": [],
         "current": None, "attempt": 0, "last_failure": None, "outcomes": [],
         "limits_hit": [], "evidence": {}, "proposal": None, "rejected": [], "malformed": [],
-        "queries": 0,
+        "queries": 0, "propose_base": 0,
     }
 
 

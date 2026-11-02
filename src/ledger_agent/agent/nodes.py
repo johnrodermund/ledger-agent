@@ -59,7 +59,7 @@ def explore(state: AgentState, deps: Deps) -> dict[str, Any]:
         deps.limits.explore_queries,
         SUBMIT_SCHEMA_NOTES_TOOL,
         state["dbname"],
-        token_limit=deps.limits.tokens,
+        token_budget=deps.limits.explore_tokens,
     )
     notes = result.submitted.get("notes", "")
     return {
@@ -118,7 +118,7 @@ def hunt(state: AgentState, deps: Deps) -> dict[str, Any]:
         deps.limits.hunt_queries,
         SUBMIT_FINDINGS_TOOL,
         state["dbname"],
-        token_limit=deps.limits.tokens,
+        token_budget=deps.limits.hunt_tokens,
     )
     submitted = result.submitted.get("findings", [])
     if not isinstance(submitted, list):
@@ -190,6 +190,7 @@ def confirm(state: AgentState, deps: Deps) -> dict[str, Any]:
         "evidence": {f.finding_id: evidence[f.finding_id] for f in merged},
         "queue": [f.finding_id for f in merged],
         "queries": state.get("queries", 0) + len(state["findings"]),
+        "propose_base": deps.client.tokens_used,
     }
 
 
@@ -311,13 +312,14 @@ def propose(state: AgentState, deps: Deps) -> dict[str, Any]:
         return _end_finding(state, Outcome(
             finding_id=finding.finding_id, status="needs_human", attempts=0,
             reason="no correction is proposed for a finding of type other"))
-    if deps.client.tokens_used >= deps.limits.tokens:
+    # Its own share from where propose began, and never past the limit for the whole run.
+    stop_at = min(state["propose_base"] + deps.limits.propose_tokens, deps.limits.tokens)
+    if deps.client.tokens_used >= stop_at:
         return _stop_for_tokens(state)
     malformed: list[dict[str, Any]] = []
     try:
         correction, problem = _request_correction(
-            deps.client, PROPOSE_SYSTEM, _propose_prompt(state, finding), deps.limits.tokens,
-            malformed)
+            deps.client, PROPOSE_SYSTEM, _propose_prompt(state, finding), stop_at, malformed)
     except _TokenLimit:
         return _stop_for_tokens(state) | {"malformed": [*state["malformed"], *malformed]}
     kept = {"malformed": [*state["malformed"], *malformed]}

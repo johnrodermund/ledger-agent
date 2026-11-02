@@ -214,6 +214,26 @@ def test_token_limit_stops_and_reports_partial(db, fault, tmp_path):
     assert "token limit reached" in (tmp_path / "out" / "report.md").read_text()
 
 
+def test_propose_stops_at_its_own_budget_and_keeps_earlier_findings(db, fault, tmp_path):
+    second = finding_item(fault) | {
+        "summary": "second", "affected_rows": [{"table": "APINVH", "key": 1}]}
+    good = reply(call("submit_correction", "p1", **true_args(fault)), tokens=200)
+    result, provider = run(db, tmp_path, [
+        *discovery(finding_item(fault), second), good], Limits(tokens=1000))
+    assert [o.status for o in result.state["outcomes"]] == ["verified", "needs_human"]
+    assert result.state["outcomes"][1].reason == "token limit reached"
+    assert "tokens" in result.state["limits_hit"]
+    assert len(provider.requests) == 3
+
+
+def test_propose_budget_ignores_what_earlier_stages_spent(db, fault, tmp_path):
+    result, _ = run(db, tmp_path, [
+        reply(call("submit_schema_notes", "n1", notes="n"), tokens=200),
+        reply(call("submit_findings", "f1", findings=[finding_item(fault)]), tokens=300),
+        propose_reply(true_args(fault))], Limits(tokens=1000))
+    assert [o.status for o in result.state["outcomes"]] == ["verified"]
+
+
 def test_no_findings_completes_cleanly(db, tmp_path):
     result, _ = run(db, tmp_path, discovery())
     write_report(result, tmp_path / "out")

@@ -19,6 +19,19 @@ class Limits:
     fix_attempts: int = 3
     tokens: int = 200_000
 
+    # Stage budgets are shares of tokens, each measured from the start of its stage.
+    @property
+    def explore_tokens(self) -> int:
+        return self.tokens * 30 // 100
+
+    @property
+    def hunt_tokens(self) -> int:
+        return self.tokens * 50 // 100
+
+    @property
+    def propose_tokens(self) -> int:
+        return self.tokens * 20 // 100
+
 
 class DroppedFinding(BaseModel):
     """A submitted finding that did not survive checking, and why."""
@@ -70,6 +83,7 @@ class AgentState(TypedDict):
     rejected: list[Correction]  # every correction the verifier refused, in order
     malformed: list[dict[str, Any]]  # raw arguments of submissions that failed validation
     queries: int
+    propose_base: int  # the client's token total when propose began
 
 
 @dataclass

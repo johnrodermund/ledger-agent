@@ -18,7 +18,7 @@ from ledger_agent.agent.state import Limits
 from ledger_agent.db import connect_admin
 from ledger_agent.erp.generate import generate_clean
 from ledger_agent.erp.load import load
-from ledger_agent.llm.client import ModelClient, ModelResponse
+from ledger_agent.llm.client import ModelClient, ModelRequest, ModelResponse
 from ledger_agent.models import Finding, RowRef
 
 GOOD_SQL = 'SELECT "JRNL_NO" FROM "GLJRNH" ORDER BY 1 LIMIT 3'
@@ -173,11 +173,66 @@ def test_loop_reports_missing_required_fields_back_to_model(db, tmp_path):
     assert res["is_error"] and "notes" in res["content"]
 
 
-def test_loop_stops_at_token_limit(db, tmp_path):
-    client, provider = make_client(tmp_path, [reply(sql_call(GOOD_SQL), tokens=500)])
-    result = loop(client, db, token_limit=500)
-    assert result.limit_hit and result.limit_kind == "tokens" and result.submitted == {}
-    assert len(provider.requests) == 1
+def test_loop_withdraws_sql_near_its_token_budget_and_keeps_the_submission(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL), tokens=500), reply(notes_call("so far"))])
+    result = loop(client, db, token_budget=500)
+    assert result.submitted == {"notes": "so far"} and result.failure is None
+    assert result.limit_hit and result.limit_kind == "tokens"
+    forced = provider.requests[1]
+    assert [t["name"] for t in forced.tools] == ["submit_schema_notes"]
+    assert forced.tool_choice == "submit_schema_notes"
+
+
+def test_loop_forces_the_submit_before_the_budget_is_spent(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL, "a"), tokens=300), reply(sql_call(GOOD_SQL, "b"), tokens=300),
+        reply(notes_call())])
+    result = loop(client, db, token_budget=1000)  # 600 spent + one 300 turn + 200 reserve
+    assert result.limit_kind == "tokens" and client.tokens_used < 1000
+    assert [len(r.tools) for r in provider.requests] == [2, 2, 1]
+
+
+def test_loop_leaves_sql_available_while_the_budget_allows(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL), tokens=100), reply(notes_call(), tokens=100)])
+    result = loop(client, db, token_budget=1000)
+    assert not result.limit_hit and result.limit_kind is None
+    assert len(provider.requests[1].tools) == 2
+
+
+def test_loop_budget_counts_from_the_stage_start(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(tokens=5000), reply(sql_call(GOOD_SQL), tokens=100), reply(notes_call())])
+    client.complete(ModelRequest("m", "s", [], []))  # an earlier stage spent 5000
+    result = loop(client, db, token_budget=1000)
+    assert not result.limit_hit
+    assert len(provider.requests[1].tools) == len(provider.requests[2].tools) == 2
+
+
+def test_loop_refuses_sql_on_a_turn_forced_by_tokens(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL), tokens=500),
+        reply(sql_call(GOOD_SQL, "b")),  # ignores the withdrawal
+        reply(notes_call())])
+    result = loop(client, db, token_budget=500)
+    assert result.queries_used == 1 and result.submitted == {"notes": "notes"}
+    (res,) = tool_results(provider.requests[2])
+    assert res["is_error"] and "limit" in res["content"]
+
+
+def test_loop_reports_tokens_when_the_submitting_turn_crosses_the_budget(db, tmp_path):
+    client, _ = make_client(tmp_path, [reply(notes_call(), tokens=500)])
+    result = loop(client, db, token_budget=500)
+    assert result.limit_kind == "tokens" and result.submitted == {"notes": "notes"}
+
+
+def test_loop_fails_when_the_forced_turn_and_its_retry_are_ignored(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL), tokens=500), ModelResponse(text="a"), ModelResponse(text="b")])
+    result = loop(client, db, token_budget=500)
+    assert result.failure and result.limit_kind == "tokens" and result.submitted == {}
+    assert len(provider.requests) == 3
 
 
 def test_hunt_prompt_names_no_tables_or_recipes():
@@ -210,6 +265,43 @@ def test_explore_stores_notes(db, tmp_path):
     client, _ = make_client(tmp_path, [reply(sql_call(GOOD_SQL)), reply(notes_call("the notes"))])
     out = explore(base_state(db), Deps(client, Limits()))
     assert out["schema_notes"] == "the notes" and out["limits_hit"] == []
+
+
+def test_limits_split_the_token_limit_between_stages():
+    limits = Limits()
+    assert limits.tokens == 200_000
+    assert (limits.explore_tokens, limits.hunt_tokens, limits.propose_tokens) == (
+        60_000, 100_000, 40_000)
+    assert Limits(tokens=1000).hunt_tokens == 500
+
+
+def test_explore_keeps_notes_when_its_token_budget_runs_out(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL), tokens=300), reply(notes_call("kept"))])
+    out = explore(base_state(db), Deps(client, Limits(tokens=1000)))
+    assert out["schema_notes"] == "kept" and out["limits_hit"] == ["tokens"]
+    assert [t["name"] for t in provider.requests[1].tools] == ["submit_schema_notes"]
+
+
+def test_hunt_keeps_findings_when_its_token_budget_runs_out(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL), tokens=500), reply(findings_call(finding()))])
+    out = hunt(base_state(db), Deps(client, Limits(tokens=1000)))
+    assert [f.finding_id for f in out["findings"]] == ["F001"]
+    assert out["limits_hit"] == ["tokens"]
+    assert [t["name"] for t in provider.requests[1].tools] == ["submit_findings"]
+
+
+def test_hunt_budget_ignores_what_explore_spent(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(notes_call(), tokens=900), reply(sql_call(GOOD_SQL), tokens=10),
+        reply(findings_call(finding()))])
+    limits = Limits(tokens=1000)
+    state = base_state(db)
+    state |= explore(state, Deps(client, limits))
+    out = hunt(state, Deps(client, limits))
+    assert out["limits_hit"] == ["tokens"]  # the overrun in explore, nothing from hunt
+    assert len(provider.requests[2].tools) == 2
 
 
 def test_explore_records_failure_and_query_limit(db, tmp_path):
