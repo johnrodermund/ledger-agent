@@ -18,12 +18,30 @@ from ledger_agent.models import (
     StatusChange,
 )
 from ledger_agent.verifier.render import Statement, render, render_text
-from ledger_agent.verifier.verify import MAX_CORRECTION_ROWS, VerifyResult, verify
+from ledger_agent.verifier.verify import (
+    _CHECKS,
+    MAX_CORRECTION_ROWS,
+    VerifyResult,
+    _change_limits,
+    _structure,
+    _trial_run,
+    verify,
+)
 
 OPEN_PRD = N_CLOSED + 1
 CLOSED_PRD = N_CLOSED
 TABLES = ["GLPERD", "GLCOA", "GLJRNH", "GLJRNL", "APVEND", "APINVH", "APPAYM", "SYSDICT"]
 RENDER = "ledger_agent.verifier.verify.render"
+PIPELINE = "ledger_agent.verifier.verify._CHECKS"
+
+
+@pytest.fixture(autouse=True)
+def first_three_checks_only(monkeypatch):
+    """This file tests structure, the trial run and change limits, so its corrections
+    need not fix anything. tests/test_verify_rules.py covers the rest."""
+    first_three = (_structure, _trial_run, _change_limits)
+    assert _CHECKS[:3] == first_three
+    monkeypatch.setattr(PIPELINE, first_three)
 
 
 def line(**overrides):

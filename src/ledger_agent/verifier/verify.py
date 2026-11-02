@@ -7,14 +7,18 @@ Reasons go back to the LLM and into the replay hash, so they carry only values
 from the correction and the data.
 """
 
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 import psycopg
 
 from ledger_agent.db import connect_rw
-from ledger_agent.models import Correction, Finding
+from ledger_agent.models import Correction, CorrectionLine, Finding
+from ledger_agent.verifier.invariants import Violation, global_violations, group_net
 from ledger_agent.verifier.render import Statement, render
+from ledger_agent.verifier.rules import check_resolved
 
 MAX_CORRECTION_ROWS = 20
 TRIAL_TIMEOUT_MS = 5000
@@ -42,7 +46,7 @@ class VerifyResult:
 
 @dataclass
 class _Trial:
-    """What the checks share. _trial_run fills in the last three."""
+    """What the checks share. _trial_run and _resolution fill in the defaults."""
 
     conn: psycopg.Connection
     finding: Finding
@@ -50,6 +54,8 @@ class _Trial:
     next_jrnl_no: int = 0
     statements: list[Statement] = field(default_factory=list)
     before: dict[str, tuple] = field(default_factory=dict)
+    violations_before: set[Violation] = field(default_factory=set)
+    violations_after: set[Violation] = field(default_factory=set)
 
 
 def _database_failure(e: psycopg.Error) -> VerifyResult:
@@ -59,6 +65,29 @@ def _database_failure(e: psycopg.Error) -> VerifyResult:
     # Primary message only: no connection details, positions or hints.
     message = e.diag.message_primary or type(e).__name__
     return VerifyResult(False, "trial_run", f"database error: {message}")
+
+
+def _bad_account_problem(lines: list[CorrectionLine], active: dict[str, str],
+                         net: dict[str, Decimal], original: int | None) -> str | None:
+    """A missing or inactive account may only be worked down towards zero: on the
+    side that reduces its net in the group, and by no more than that net."""
+    moved: dict[str, Decimal] = defaultdict(Decimal)
+    for line in lines:
+        acct = line.acct_cd
+        if active.get(acct) == "Y":
+            continue
+        name = acct.rstrip()
+        state = "is inactive" if acct in active else "does not exist"
+        held = net.get(acct, 0)
+        if not held:
+            return f"account {name} {state} and carries no balance on journal {original}"
+        reduced = line.cr_amt if held > 0 else line.dr_amt
+        if not reduced:
+            return f"account {name} {state} and may only be reduced: "                    f"journal {original} nets {held} on it"
+        moved[acct] += reduced
+        if moved[acct] > abs(held):
+            return f"account {name} {state} and correction moves {moved[acct]} on it, "                    f"more than the {held} net on journal {original}"
+    return None
 
 
 def _structure_problem(trial: _Trial) -> str | None:
@@ -82,7 +111,7 @@ def _structure_problem(trial: _Trial) -> str | None:
             return f"invoice {change.inv_id} has more than one status change"
         seen.add(change.inv_id)
 
-    original_accounts: set[str] = set()
+    net: dict[str, Decimal] = {}
     if original is not None:
         header = conn.execute('SELECT "REF_JRNL_NO" FROM "GLJRNH" WHERE "JRNL_NO" = %s',
                               (original,)).fetchone()
@@ -90,18 +119,12 @@ def _structure_problem(trial: _Trial) -> str | None:
             return f"journal {original} does not exist"
         if header[0] is not None:
             return f"journal {original} is itself a correction of journal {header[0]}"
-        original_accounts = {r[0] for r in conn.execute(
-            'SELECT "ACCT_CD" FROM "GLJRNL" WHERE "JRNL_NO" = %s', (original,))}
+        net = group_net(conn, original)
 
     active = dict(conn.execute('SELECT "ACCT_CD", "ACTV_FLG" FROM "GLCOA"').fetchall())
-    for line in lines:
-        if line.acct_cd in original_accounts:
-            continue
-        name = line.acct_cd.rstrip()
-        if line.acct_cd not in active:
-            return f"account {name} does not exist"
-        if active[line.acct_cd] != "Y":
-            return f"account {name} is inactive and not on journal {original}"
+    problem = _bad_account_problem(lines, active, net, original)
+    if problem:
+        return problem
 
     if lines:
         prd_id = lines[0].prd_id
@@ -113,10 +136,12 @@ def _structure_problem(trial: _Trial) -> str | None:
             return f"period {prd_id} is not open"
 
     for change in changes:
-        found = conn.execute('SELECT 1 FROM "APINVH" WHERE "INV_ID" = %s',
+        found = conn.execute('SELECT "STAT_CD" FROM "APINVH" WHERE "INV_ID" = %s',
                              (change.inv_id,)).fetchone()
         if found is None:
             return f"invoice {change.inv_id} does not exist"
+        if found[0] == "V":
+            return f"invoice {change.inv_id} is already void"
     return None
 
 
@@ -141,6 +166,7 @@ def _trial_run(trial: _Trial) -> VerifyResult | None:
         trial.next_jrnl_no = conn.execute(
             'SELECT coalesce(max("JRNL_NO"), 0) + 1 FROM "GLJRNH"').fetchone()[0]
         trial.before = _snapshot(trial)
+        trial.violations_before = global_violations(conn)
         trial.statements = render(trial.correction, trial.next_jrnl_no)
         for statement in trial.statements:
             conn.execute(statement.sql, statement.params)
@@ -183,9 +209,31 @@ def _change_limits(trial: _Trial) -> VerifyResult | None:
     return None
 
 
-# The resolution and collateral checks slot in after _change_limits.
+def _resolution(trial: _Trial) -> VerifyResult | None:
+    """The finding's own rule, then proof the correction cleared a violation of that
+    kind, so a correction of some healthy journal cannot pass as a fix."""
+    try:
+        problem = check_resolved(trial.conn, trial.finding, trial.correction)
+        trial.violations_after = global_violations(trial.conn)
+    except psycopg.Error as e:
+        return _database_failure(e)
+    if problem is None:
+        cleared = trial.violations_before - trial.violations_after
+        if not any(v.kind == trial.finding.type for v in cleared):
+            problem = f"correction clears no {trial.finding.type} violation"
+    return VerifyResult(False, "resolution", problem) if problem else None
+
+
+def _collateral(trial: _Trial) -> VerifyResult | None:
+    new = sorted(trial.violations_after - trial.violations_before)
+    if not new:
+        return None
+    listed = ", ".join(f"{v.kind} {v.ref}" for v in new)
+    return VerifyResult(False, "collateral", f"correction introduces {listed}")
+
+
 _CHECKS: tuple[Callable[[_Trial], VerifyResult | None], ...] = (
-    _structure, _trial_run, _change_limits)
+    _structure, _trial_run, _change_limits, _resolution, _collateral)
 
 
 def _rollback_and_close(conn: psycopg.Connection) -> None:
