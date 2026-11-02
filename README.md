@@ -66,6 +66,8 @@ The model client has three modes, set with `LEDGER_LLM_MODE`:
 
 A recording is keyed by a hash of the model, messages and tools, and holds that key, the model, the response and a little metadata, not the request. A request with no recording fails loudly with a missing-recording error. There is no fallback to a live call. Changing a prompt means re-recording.
 
+The agent runs on Claude Haiku 5.5 (`claude-haiku-5-5`) with thinking turned off, which keeps recording cheap. Results describe that model; a stronger model would likely score higher. `DEFAULT_MODEL` in `src/ledger_agent/llm/client.py` switches it, and changing it means re-recording.
+
 A replay proves that the pipeline, the verifier and the scoring work end to end and give the same answer every time. It does not prove how the agent behaves against the real model today, and it does not prove that a changed prompt still works. The manually started live workflow exists for that.
 
 ## How it works

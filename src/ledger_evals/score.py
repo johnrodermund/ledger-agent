@@ -26,11 +26,18 @@ from ledger_agent.models import AnswerKey, Correction, Finding, PlantedFault, Ro
 class Price(NamedTuple):
     input: Decimal
     output: Decimal
+    # Some models charge more for a request whose prompt exceeds long_above tokens.
+    long_input: Decimal | None = None
+    long_output: Decimal | None = None
+    long_above: int | None = None
 
 
 # US dollars per million tokens: first-party API list prices, no caching or batching.
 # Taken from the claude-api skill's model table, cached 2026-10-06.
 PRICES_PER_MTOK = {
+    "claude-haiku-5-5": Price(input=Decimal("0.10"), output=Decimal("0.50"),
+                              long_input=Decimal("0.50"), long_output=Decimal("2.50"),
+                              long_above=100_000),
     "claude-sonnet-5-5": Price(input=Decimal("2.00"), output=Decimal("10.00")),
     "claude-opus-5-5": Price(input=Decimal("4.00"), output=Decimal("20.00")),
 }
@@ -204,9 +211,20 @@ def _incomplete_reasons(result: AuditResult) -> list[str]:
                       for hit in hits if hit.endswith("_refused")]
 
 
-def _cost(input_tokens: int, output_tokens: int, model: str) -> Decimal:
+def _cost(result: AuditResult, model: str) -> Decimal:
+    """Each request is priced on its own prompt length. A result with no per-request
+    counts is priced on its totals at the standard rate."""
     price = PRICES_PER_MTOK[model]  # an unpriced model fails, rather than costing nothing
-    return (input_tokens * price.input + output_tokens * price.output) / 1_000_000
+    if not result.calls:
+        return (result.input_tokens * price.input
+                + result.output_tokens * price.output) / 1_000_000
+    total = Decimal(0)
+    for input_tokens, output_tokens in result.calls:
+        long = price.long_above is not None and input_tokens > price.long_above
+        rate_in = price.long_input if long else price.input
+        rate_out = price.long_output if long else price.output
+        total += input_tokens * rate_in + output_tokens * rate_out
+    return total / 1_000_000
 
 
 def score(result: AuditResult, key: AnswerKey, *,
@@ -262,7 +280,7 @@ def score(result: AuditResult, key: AnswerKey, *,
         needs_human=sum(o.status == "needs_human" for o in state["outcomes"]),
         refusals=sum(hit.endswith("_refused") for hit in state["limits_hit"]),
         input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_usd=_cost(result.input_tokens, result.output_tokens, model),
+        cost_usd=_cost(result, model),
         queries=result.queries, incomplete=incomplete, missed_faults=missed,
         alarmed_decoys=[d.decoy_id for d in key.decoys if d.decoy_id in alarmed],
         wrong_fixes=wrong, unmatched_findings=unmatched,

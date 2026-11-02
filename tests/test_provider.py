@@ -18,7 +18,7 @@ from ledger_agent.llm.client import (
 )
 
 TOOL = {"name": "run_sql", "description": "q", "input_schema": {"type": "object"}}
-REQ = ModelRequest("claude-sonnet-5-5", "sys", [{"role": "user", "content": "hi"}], [TOOL])
+REQ = ModelRequest("claude-haiku-5-5", "sys", [{"role": "user", "content": "hi"}], [TOOL])
 
 
 def message(content, stop_reason="end_turn"):
@@ -45,12 +45,25 @@ def replying(body, status=200, headers=None):
     return provider_with(handler), sent
 
 
-def test_sends_between_tools_thinking_and_no_tool_choice():
+def test_haiku_sends_disabled_thinking_and_no_tool_choice():
     provider, sent = replying(message([{"type": "text", "text": "ok"}]))
     provider.complete(REQ)
+    assert sent[0]["thinking"] == {"type": "disabled"}
+    assert "tool_choice" not in sent[0] and "output_config" not in sent[0]
+    assert sent[0]["model"] == "claude-haiku-5-5" and sent[0]["tools"] == [TOOL]
+
+
+def test_sonnet_sends_between_tools_thinking():
+    provider, sent = replying(message([{"type": "text", "text": "ok"}]))
+    provider.complete(ModelRequest("claude-sonnet-5-5", "sys", REQ.messages, [TOOL]))
     assert sent[0]["thinking"] == {"type": "between_tools"}
-    assert "tool_choice" not in sent[0]
-    assert sent[0]["model"] == REQ.model and sent[0]["tools"] == [TOOL]
+
+
+def test_a_model_without_a_thinking_setting_is_refused_before_any_call():
+    provider, sent = replying(message([]))
+    with pytest.raises(ValueError, match="no thinking setting"):
+        provider.complete(ModelRequest("claude-unknown", "sys", REQ.messages, [TOOL]))
+    assert sent == []
 
 
 def test_a_forced_turn_steers_from_the_system_prompt():

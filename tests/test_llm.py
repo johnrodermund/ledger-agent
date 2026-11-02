@@ -98,6 +98,7 @@ def test_tokens_accumulate_in_replay_too(tmp_path):
     assert client.input_tokens == 20
     assert client.output_tokens == 10
     assert client.tokens_used == 30
+    assert client.calls == [(10, 5), (10, 5)]
 
 
 def test_retries_transient_errors_then_raises(tmp_path):

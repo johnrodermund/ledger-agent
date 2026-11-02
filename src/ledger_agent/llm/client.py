@@ -16,12 +16,17 @@ from typing import Any, Callable, Literal, Protocol
 
 from ledger_agent.llm.recording import load_recording, recording_exists, save_recording
 
-DEFAULT_MODEL = "claude-sonnet-5-5"
+DEFAULT_MODEL = "claude-haiku-5-5"
 API_MAX_RETRIES = 6  # seven attempts, about five minutes of backoff in all
 BACKOFF_BASE_SECONDS = 5.0
 MAX_RETRY_WAIT_SECONDS = 600.0
 DEFAULT_MAX_TOKENS = 16000
-THINKING = {"type": "between_tools"}  # Sonnet 5.5 only: another model refuses this value
+# Thinking is off on every model, so no thinking block is ever passed back. Each model
+# spells that differently and refuses the other's spelling.
+THINKING_BY_MODEL = {
+    "claude-haiku-5-5": {"type": "disabled"},  # accepted at the default effort, medium
+    "claude-sonnet-5-5": {"type": "between_tools"},
+}
 
 Mode = Literal["replay", "record", "live"]
 MODES = ("replay", "record", "live")
@@ -110,6 +115,8 @@ class AnthropicProvider:
 
     def complete(self, req: ModelRequest) -> ModelResponse:
         a = self._anthropic
+        if req.model not in THINKING_BY_MODEL:
+            raise ValueError(f"no thinking setting for model {req.model!r}")
         system = req.system
         kwargs: dict[str, Any] = {}
         if req.tools:
@@ -124,7 +131,7 @@ class AnthropicProvider:
                 system=system,
                 messages=req.messages,
                 # The pinned SDK's thinking parameter predates between_tools.
-                extra_body={"thinking": THINKING},
+                extra_body={"thinking": THINKING_BY_MODEL[req.model]},
                 **kwargs,
             )
         except a.APIConnectionError as e:
@@ -172,6 +179,8 @@ class ModelClient:
         self._sleep = sleep
         self.input_tokens = 0
         self.output_tokens = 0
+        # (input, output) per request, since some prices depend on a request's length.
+        self.calls: list[tuple[int, int]] = []
 
     @property
     def tokens_used(self) -> int:
@@ -188,6 +197,7 @@ class ModelClient:
                 save_recording(self.recordings, self.namespace, req, resp)
         self.input_tokens += resp.input_tokens
         self.output_tokens += resp.output_tokens
+        self.calls.append((resp.input_tokens, resp.output_tokens))
         return resp
 
     def _call_with_retry(self, req: ModelRequest) -> ModelResponse:

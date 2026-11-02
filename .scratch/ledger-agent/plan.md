@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Python 3.12 and `postgres:16.4`, both pinned in the images. Pin Python dependencies in `pyproject.toml`.
-- Default model `claude-sonnet-5-5`. Load the `claude-api` skill before writing Task 5.
+- Default model `claude-haiku-5-5` (changed from `claude-sonnet-5-5` before recording, to keep cost low). Load the `claude-api` skill before writing Task 5.
 - All verification runs in Docker: `docker compose run --rm tests pytest <path> -v`. Docker Desktop is required before Task 1; the alternative is pushing to a private branch and using CI, which is slower.
 - Money is `Decimal`, never `float`, with 2 decimal places.
 - Limits, as configurable defaults: `explore` 15 queries, `hunt` 40 queries, 3 fix attempts, 200,000 tokens per run.

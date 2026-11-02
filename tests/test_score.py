@@ -100,7 +100,8 @@ def needs_human(fid):
 
 
 def audit_result(findings=(), outcomes=(), dropped=(), rejected=(), malformed=(), limits_hit=(),
-                 input_tokens=0, output_tokens=0, queries=0, tool_results=(MEMO_SHOWN,)):
+                 input_tokens=0, output_tokens=0, queries=0, tool_results=(MEMO_SHOWN,),
+                 calls=()):
     state = {
         "dbname": "x", "schema_notes": "", "findings": list(findings), "dropped": list(dropped),
         "queue": [], "current": None, "attempt": 0, "last_failure": None,
@@ -110,7 +111,8 @@ def audit_result(findings=(), outcomes=(), dropped=(), rejected=(), malformed=()
         "malformed": list(malformed),
     }
     return AuditResult(state=state, trace=[], tokens=input_tokens + output_tokens,
-                       input_tokens=input_tokens, output_tokens=output_tokens, queries=queries)
+                       input_tokens=input_tokens, output_tokens=output_tokens, queries=queries,
+                       calls=list(calls))
 
 
 # Matching ------------------------------------------------------------------------------
@@ -498,9 +500,26 @@ def test_cost_uses_the_price_table_for_input_and_output():
 
 
 def test_cost_is_exact_in_small_amounts_and_sums_exactly():
-    one = score(audit_result(input_tokens=1, output_tokens=1), answer_key())
+    one = score(audit_result(input_tokens=1, output_tokens=1), answer_key(),
+                model="claude-sonnet-5-5")
     assert one.cost_usd == Decimal("0.000012")
     assert aggregate([one] * 3).cost_usd == Decimal("0.000036")
+
+
+def test_default_model_is_haiku_at_its_standard_rate():
+    assert DEFAULT_MODEL == "claude-haiku-5-5"
+    scored = score(audit_result(input_tokens=1_000_000, output_tokens=20_000,
+                                calls=[(50_000, 1_000)] * 20), answer_key())
+    assert scored.cost_usd == Decimal("0.11")  # 1M in at $0.10 plus 20k out at $0.50
+
+
+def test_haiku_prices_each_long_prompt_at_the_long_rate():
+    calls = [(100_000, 1_000), (100_001, 1_000)]  # the first is not over the limit
+    scored = score(audit_result(input_tokens=200_001, output_tokens=2_000, calls=calls),
+                   answer_key())
+    standard = Decimal(100_000) * Decimal("0.10") + Decimal(1_000) * Decimal("0.50")
+    long = Decimal(100_001) * Decimal("0.50") + Decimal(1_000) * Decimal("2.50")
+    assert scored.cost_usd == (standard + long) / 1_000_000
 
 
 def test_aggregate_counts_incomplete_scenarios():

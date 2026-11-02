@@ -83,6 +83,7 @@ def audit(dbname: str, deps: Deps) -> AuditResult:
     deps.trace.clear()
     input_before = deps.client.input_tokens
     output_before = deps.client.output_tokens
+    calls_before = len(deps.client.calls)
     final = build_graph(deps).invoke(
         initial_state(dbname), config={"recursion_limit": RECURSION_LIMIT})
     input_tokens = deps.client.input_tokens - input_before
@@ -94,4 +95,5 @@ def audit(dbname: str, deps: Deps) -> AuditResult:
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         queries=final["queries"],
+        calls=deps.client.calls[calls_before:],
     )

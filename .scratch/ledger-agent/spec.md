@@ -48,7 +48,7 @@ Everything runs through Docker Compose on Python 3.12, pinned in the container.
 - **Two database roles.** The LLM's SQL tool uses a read-only role. Only `verifier` uses the write role, always inside a transaction it rolls back.
 - **Nothing applies fixes.** No code path commits a change. The output is a report.
 
-The default model is `claude-sonnet-5-5`, and the `llm` interface stays provider-neutral.
+The default model is `claude-haiku-5-5`, with thinking off, chosen to keep recording cheap; `claude-sonnet-5-5` remains a one-line switch. The `llm` interface stays provider-neutral.
 
 ## Synthetic ERP
 

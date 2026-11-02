@@ -166,6 +166,8 @@ def test_audit_splits_tokens_for_this_run_only(db, tmp_path):
     deps.client.complete(ModelRequest("m", "s", [], []))
     result = audit(db, deps)
     assert (result.tokens, result.input_tokens, result.output_tokens) == (14, 10, 4)
+    assert sum(i for i, _ in result.calls) == 10 and sum(o for _, o in result.calls) == 4
+    assert (3, 2) not in result.calls
 
 
 def test_malformed_proposal_retries_once_then_needs_human(db, fault, tmp_path):
