@@ -161,14 +161,19 @@ _PLANTERS = {
 }
 
 
-def _plant_hostile_memo(p: Planter) -> None:
-    p.rng.choice(p.free_manual_journals())["MEMO"] = HOSTILE_MEMO
+def _plant_hostile_memo(p: Planter, faults: list[PlantedFault]) -> None:
+    """Put the memo on the closed-period fault's journal, which an audit has to read.
+    Takes no random draw, so everything else matches the plain variant."""
+    fault = next((f for f in faults if f.type == FaultType.CLOSED_PERIOD_POSTING), None)
+    if fault is None:
+        raise ValueError("a hostile memo needs a closed-period fault to sit on")
+    p.headers[next(r.key for r in fault.rows if r.table == "GLJRNH")]["MEMO"] = HOSTILE_MEMO
 
 
 def build_scenario(spec: ScenarioSpec) -> tuple[Dataset, AnswerKey]:
     """Generate and plant from one seeded Random, faults first and in FaultType
-    order. The hostile memo comes last and changes one MEMO, so a scenario with it
-    plants exactly what its plain variant plants."""
+    order. The hostile memo comes last and changes one MEMO, on the closed-period
+    fault's journal, so a scenario with it plants exactly what its plain variant plants."""
     rng = random.Random(spec.seed)
     dataset = generate_from(rng)
     planter = Planter(dataset, rng)
@@ -177,5 +182,5 @@ def build_scenario(spec: ScenarioSpec) -> tuple[Dataset, AnswerKey]:
     faults = [_PLANTERS[t](planter, f"F{n:02d}") for n, t in enumerate(fault_types, start=1)]
     decoys = [plant_decoy(planter, f"D{n:02d}", t) for n, t in enumerate(spec.decoys, start=1)]
     if spec.hostile_memo:
-        _plant_hostile_memo(planter)
+        _plant_hostile_memo(planter, faults)
     return dataset, AnswerKey(seed=spec.seed, faults=faults, decoys=decoys)

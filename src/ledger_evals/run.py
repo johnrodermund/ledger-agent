@@ -221,8 +221,8 @@ def render_markdown(runs: list[ScenarioRun], scores: dict[str, ScenarioScore],
     injections = [run.spec.id for run in runs if run.spec.hostile_memo]
     if injections:
         md += ["## Injection", "", "| Scenario | Result |", "| --- | --- |"]
-        md += [f"| {sid} | {'passed' if scores[sid].injection_passed else 'FAILED'} |"
-               for sid in injections]
+        md += [f"| {sid} | passed |" if scores[sid].injection_passed
+               else f"| {sid} | FAILED: {scores[sid].injection_detail} |" for sid in injections]
         md += [""]
 
     if len(summary.aggregates) > 1:

@@ -8,7 +8,7 @@ import pytest
 
 from ledger_agent.cli import main
 from ledger_agent.db import connect_admin
-from ledger_agent.erp.faults import HOSTILE_ACCT, build_scenario
+from ledger_agent.erp.faults import HOSTILE_ACCT, HOSTILE_MEMO, build_scenario
 from ledger_agent.erp.generate import N_CLOSED, generate_clean
 from ledger_agent.erp.load import load
 from ledger_agent.models import (
@@ -198,7 +198,6 @@ def test_planted_rows_never_collide(seed):
     assert len(seen) == len(set(seen))
     hostile = {r["JRNL_NO"] for r in dataset.tables["GLJRNH"] if HOSTILE_ACCT in r["MEMO"]}
     assert len(hostile) == 1
-    assert hostile.isdisjoint(r.key for r in seen if r.table == "GLJRNH")
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -397,10 +396,12 @@ def test_recurring_decoy_is_two_identical_invoices_a_month_apart():
     assert {first["JRNL_NO"], second["JRNL_NO"]} == set(refs(decoy, "GLJRNH"))
 
 
+CLOSED_ONLY = {FaultType.CLOSED_PERIOD_POSTING: 1}
+
+
 def test_hostile_memo_is_only_in_memo_field():
-    dataset, key = build_scenario(spec_with({}, hostile_memo=True))
+    dataset, _ = build_scenario(spec_with(CLOSED_ONLY, hostile_memo=True))
     assert any("ignore" in r["MEMO"].lower() for r in dataset.tables["GLJRNH"])
-    assert key.faults == [] and key.decoys == []
     for table, rows in dataset.tables.items():
         for row in rows:
             for column, value in row.items():
@@ -409,7 +410,7 @@ def test_hostile_memo_is_only_in_memo_field():
 
 
 def test_hostile_memo_targets_an_account_outside_the_chart():
-    dataset, _ = build_scenario(spec_with({}, hostile_memo=True))
+    dataset, _ = build_scenario(spec_with(CLOSED_ONLY, hostile_memo=True))
     memo = next(h["MEMO"] for h in dataset.tables["GLJRNH"] if "ignore" in h["MEMO"].lower())
     assert HOSTILE_ACCT in memo and "stop" in memo.lower()
     assert HOSTILE_ACCT.ljust(8) not in {a["ACCT_CD"] for a in dataset.tables["GLCOA"]}
@@ -435,6 +436,18 @@ def test_hostile_variant_differs_from_plain_in_one_memo_only():
     for table in plain.tables:
         if table != "GLJRNH":
             assert plain.tables[table] == hostile.tables[table]
+
+
+def test_hostile_memo_sits_on_the_closed_period_fault_journal():
+    dataset, key = build_scenario(everything(count=1, hostile_memo=True))
+    fault = next(f for f in key.faults if f.type == FaultType.CLOSED_PERIOD_POSTING)
+    target = next(r.key for r in fault.rows if r.table == "GLJRNH")
+    assert [h["JRNL_NO"] for h in dataset.tables["GLJRNH"] if h["MEMO"] == HOSTILE_MEMO] == [target]
+
+
+def test_hostile_memo_refuses_a_scenario_without_a_closed_period_fault():
+    with pytest.raises(ValueError, match="closed"):
+        build_scenario(spec_with({FaultType.UNBALANCED_JOURNAL: 1}, hostile_memo=True))
 
 
 def test_no_faults_or_decoys_leaves_the_clean_shape():

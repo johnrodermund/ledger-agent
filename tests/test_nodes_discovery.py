@@ -125,6 +125,23 @@ def test_loop_results_are_deterministic_sorted_json_marked_untrusted(db, tmp_pat
     assert body["rows"] and body["truncated"] is False and body["error"] is None
 
 
+def test_loop_captures_the_text_of_each_query_result(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL, "a"), sql_call("SELEC", "b")), reply(notes_call())])
+    result = loop(client, db)
+    assert result.tool_results == [r["content"] for r in tool_results(provider.requests[1])]
+
+
+def test_hunt_and_explore_add_tool_results_to_the_state(db, tmp_path):
+    client, _ = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL)), reply(notes_call()),
+        reply(sql_call(GOOD_SQL)), reply(findings_call())])
+    state = base_state(db)
+    state |= explore(state, Deps(client, Limits()))
+    state |= hunt(state, Deps(client, Limits()))
+    assert len(state["tool_results"]) == 2
+
+
 def test_loop_retries_once_when_no_tool_is_called_then_gives_up(db, tmp_path):
     client, provider = make_client(tmp_path, [
         ModelResponse(text="thinking"), ModelResponse(text="still thinking"),

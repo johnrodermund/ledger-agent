@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ledger_agent.agent.prompts import RUN_SQL_TOOL
@@ -28,6 +28,7 @@ class LoopResult:
     limit_hit: bool
     limit_kind: str | None = None  # "queries" or "tokens"; tokens wins if both were hit
     failure: str | None = None  # set when the model never produced a usable submission
+    tool_results: list[str] = field(default_factory=list)  # every query result the model saw
 
 
 def format_query_result(result: QueryResult) -> str:
@@ -63,6 +64,7 @@ def run_tool_loop(
     limit_hit = False
     limit_kind: str | None = None
     retried = False
+    seen: list[str] = []
     start = client.tokens_used
     last_turn = 0
 
@@ -122,14 +124,15 @@ def run_tool_loop(
                         qr = run_query(dbname, sql)
                     else:
                         qr = QueryResult(ok=False, error="sql must be a string")
-                    results.append((call.id, format_query_result(qr), not qr.ok))
+                    seen.append(format_query_result(qr))
+                    results.append((call.id, seen[-1], not qr.ok))
             else:
                 results.append((call.id, f"unknown tool {call.name!r}", True))
 
         if submitted is not None:
             if token_budget is not None and client.tokens_used - start >= token_budget:
                 limit_hit, limit_kind = True, "tokens"
-            return LoopResult(submitted, used, limit_hit, limit_kind)
+            return LoopResult(submitted, used, limit_hit, limit_kind, tool_results=seen)
 
         if problem is None:
             if not resp.tool_calls:
@@ -142,6 +145,7 @@ def run_tool_loop(
                 return LoopResult(
                     {}, used, limit_hit, limit_kind,
                     failure=f"model did not produce a valid submission: {problem}",
+                    tool_results=seen,
                 )
             retried = True
             note = {

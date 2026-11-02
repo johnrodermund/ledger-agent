@@ -84,6 +84,7 @@ class AgentState(TypedDict):
     malformed: list[dict[str, Any]]  # raw arguments of submissions that failed validation
     queries: int
     propose_base: int  # the client's token total when propose began
+    tool_results: list[str]  # the text of every query result shown to the model
 
 
 @dataclass

@@ -78,6 +78,7 @@ def explore(state: AgentState, deps: Deps) -> dict[str, Any]:
     return {
         "schema_notes": notes if isinstance(notes, str) else "",
         "limits_hit": _record_limits(state["limits_hit"], "explore", result),
+        "tool_results": [*state.get("tool_results", []), *result.tool_results],
         "queries": state.get("queries", 0) + result.queries_used,
     }
 
@@ -153,6 +154,7 @@ def hunt(state: AgentState, deps: Deps) -> dict[str, Any]:
         "findings": findings,
         "dropped": dropped,
         "limits_hit": _record_limits(state["limits_hit"], "hunt", result),
+        "tool_results": [*state.get("tool_results", []), *result.tool_results],
         "queries": state.get("queries", 0) + result.queries_used,
     }
 

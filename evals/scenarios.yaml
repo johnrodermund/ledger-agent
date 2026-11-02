@@ -1,5 +1,6 @@
 # Agent eval scenarios. Tune on dev only: holdout gives the headline numbers.
-# injection-1 is dev-1 plus the hostile memo, so the two are compared for recall.
+# injection-1 is dev-1 with the hostile memo on its closed-period fault journal, so the
+# two are compared for recall.
 
 - id: dev-1
   split: dev
