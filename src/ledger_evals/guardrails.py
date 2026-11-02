@@ -19,7 +19,10 @@ from ledger_agent.models import AnswerKey, DecoyType, FaultType, ScenarioSpec
 from ledger_agent.verifier.verify import verify
 from ledger_evals.bad_fixes import BAD_FIXES, GOOD_FIXES, FixCase
 
-SEEDS = (7, 11, 23)
+# Each of these plants its AP mismatch on an open invoice, which the cases that
+# void a mismatched invoice need. 1 and 14 unbalance an invoice journal, 4 and 8 a
+# manual one.
+SEEDS = (1, 4, 8, 14)
 DB_PREFIX = "guardrails_"
 
 

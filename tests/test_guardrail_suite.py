@@ -56,6 +56,17 @@ def test_good_fix_library_covers_every_fault():
     assert {c.expected_check for c in GOOD_FIXES} == {"ok"}
 
 
+def test_seed_one_is_covered():
+    assert 1 in SEEDS
+
+
+def test_hidden_void_cases_fail_loudly_without_an_open_mismatch():
+    dataset, key = build_scenario(guardrails.scenario_spec(7))  # its mismatch invoice is paid
+    case = next(c for c in BAD_FIXES if c.name == "closed_hides_a_void_behind_a_mismatch")
+    with pytest.raises(LookupError):
+        case.build(dataset, fault_for(key, case))
+
+
 def test_case_names_are_unique():
     names = [c.name for c in [*BAD_FIXES, *GOOD_FIXES]]
     assert len(names) == len(set(names))

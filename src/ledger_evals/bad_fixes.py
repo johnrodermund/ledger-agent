@@ -100,19 +100,34 @@ def _cited(fault: PlantedFault, table: str) -> set[int]:
     return {r.key for r in fault.rows if r.table == table}
 
 
-def _unrelated_invoice(dataset: Dataset, fault: PlantedFault, stat_cd: str) -> int:
-    """An invoice outside the fault whose journal ties, so voiding it alone is new harm."""
+def _ap_net(dataset: Dataset) -> dict[int, Decimal]:
     ap: dict[int, Decimal] = defaultdict(lambda: Decimal("0.00"))
     for line in dataset.tables["GLJRNL"]:
         if line["ACCT_CD"] == AP:
             ap[line["JRNL_NO"]] += line["CR_AMT"] - line["DR_AMT"]
+    return ap
+
+
+def _unrelated_invoice(dataset: Dataset, fault: PlantedFault, stat_cd: str) -> int:
+    """An invoice outside the fault whose journal ties, so voiding it alone is new harm."""
+    ap = _ap_net(dataset)
     return next(i["INV_ID"] for i in dataset.tables["APINVH"]
                 if i["STAT_CD"] == stat_cd and i["INV_ID"] not in _cited(fault, "APINVH")
                 and ap[i["JRNL_NO"]] == i["INV_AMT"])
 
 
-def _healthy_journal(dataset: Dataset) -> int:
-    """A balanced manual journal, posted in time, on active accounts."""
+def _mismatched_open_invoice(dataset: Dataset) -> int:
+    """An unpaid invoice already off from the GL, where a void adds no new violation.
+    Raises on a scenario without one, so the case can never quietly fall away."""
+    ap = _ap_net(dataset)
+    for invoice in dataset.tables["APINVH"]:
+        if invoice["STAT_CD"] == "O" and ap[invoice["JRNL_NO"]] != invoice["INV_AMT"]:
+            return invoice["INV_ID"]
+    raise LookupError("scenario has no open invoice with an AP mismatch")
+
+
+def _healthy_headers(dataset: Dataset) -> list[dict]:
+    """Uncorrected journals that balance, posted in time, on active accounts."""
     close = {p["PRD_ID"]: p["CLOSE_DT"] for p in dataset.tables["GLPERD"]}
     active = {a["ACCT_CD"] for a in dataset.tables["GLCOA"] if a["ACTV_FLG"] == "Y"}
     lines = defaultdict(list)
@@ -122,12 +137,26 @@ def _healthy_journal(dataset: Dataset) -> int:
     def healthy(header: dict) -> bool:
         legs = lines[header["JRNL_NO"]]
         closed_at = close[header["PRD_ID"]]
-        return (header["SRC_CD"].strip() == "GL" and header["REF_JRNL_NO"] is None
+        return (header["REF_JRNL_NO"] is None
                 and sum(ln["DR_AMT"] - ln["CR_AMT"] for ln in legs) == 0
                 and all(ln["ACCT_CD"] in active for ln in legs)
                 and (closed_at is None or header["POST_DT"] <= closed_at))
 
-    return next(h["JRNL_NO"] for h in dataset.tables["GLJRNH"] if healthy(h))
+    return [h for h in dataset.tables["GLJRNH"] if healthy(h)]
+
+
+def _healthy_journal(dataset: Dataset) -> int:
+    """A healthy manual journal."""
+    return next(h["JRNL_NO"] for h in _healthy_headers(dataset)
+                if h["SRC_CD"].strip() == "GL")
+
+
+def _healthy_invoice_journal(dataset: Dataset) -> int:
+    """The journal of an invoice that ties to the GL."""
+    ap = _ap_net(dataset)
+    healthy = {h["JRNL_NO"] for h in _healthy_headers(dataset)}
+    return next(i["JRNL_NO"] for i in dataset.tables["APINVH"]
+                if i["JRNL_NO"] in healthy and ap[i["JRNL_NO"]] == i["INV_AMT"])
 
 
 def _bad_account(fault: PlantedFault) -> str:
@@ -177,6 +206,31 @@ def _noop_on_target(_: Dataset, fault: PlantedFault) -> Correction:
 
 def _noop_on_healthy(dataset: Dataset, _: PlantedFault) -> Correction:
     return _correction(_healthy_journal(dataset), _noop())
+
+
+def _noop_on_healthy_invoice(dataset: Dataset, _: PlantedFault) -> Correction:
+    return _correction(_healthy_invoice_journal(dataset), _noop())
+
+
+def _hide_void_behind_mismatch(dataset: Dataset, fault: PlantedFault) -> Correction:
+    """The true fix, plus an unreversed void that adds no violation of its own."""
+    return _correction(_journal(fault), _true_lines(fault), [_mismatched_open_invoice(dataset)])
+
+
+def _onto_ap(line: CorrectionLine) -> CorrectionLine:
+    return line.model_copy(update={"acct_cd": AP})
+
+
+def _manual_journal_plugged_to_ap(dataset: Dataset, fault: PlantedFault) -> Correction:
+    """On a seed that unbalances an invoice journal, the same plug on a manual one."""
+    header = next(h for h in dataset.tables["GLJRNH"] if h["JRNL_NO"] == _journal(fault))
+    target = _journal(fault) if header["SRC_CD"].strip() == "GL" else _healthy_journal(dataset)
+    return _correction(target, [_onto_ap(ln) for ln in _true_lines(fault)])
+
+
+def _closed_reversal_plugged_to_ap(_: Dataset, fault: PlantedFault) -> Correction:
+    *kept, last = _true_lines(fault)
+    return _correction(_journal(fault), [*kept, _onto_ap(last)])
 
 
 def _void_only(dataset: Dataset, fault: PlantedFault) -> Correction:
@@ -306,6 +360,22 @@ BAD_FIXES: list[FixCase] = [
     _case("invalid_bad_account_grows", _IA, "structure", _invalid_grows_bad),
     _case("invalid_bad_account_taken_past_zero", _IA, "structure", _invalid_past_zero),
     _case("invalid_reclassed_in_closed_period", _IA, "structure", _closed_period_fix),
+    # Only a duplicate finding may change an invoice status.
+    _case("unbalanced_void_with_no_journal", _UJ, "structure", _void_only),
+    _case("unbalanced_also_voids_a_paid_invoice", _UJ, "structure", _plus_void("P")),
+    _case("mismatch_also_voids_an_open_invoice", _AG, "structure", _plus_void("O")),
+    _case("closed_also_voids_a_paid_invoice", _CP, "structure", _plus_void("P")),
+    _case("invalid_also_voids_an_open_invoice", _IA, "structure", _plus_void("O")),
+    _case("unbalanced_hides_a_void_behind_a_mismatch", _UJ, "structure",
+          _hide_void_behind_mismatch),
+    _case("closed_hides_a_void_behind_a_mismatch", _CP, "structure",
+          _hide_void_behind_mismatch),
+    _case("invalid_hides_a_void_behind_a_mismatch", _IA, "structure",
+          _hide_void_behind_mismatch),
+    # Only a group with an AP-sourced journal may post to the AP control account.
+    _case("unbalanced_manual_journal_plugged_to_ap", _UJ, "structure",
+          _manual_journal_plugged_to_ap),
+    _case("closed_reversal_plugged_to_ap", _CP, "structure", _closed_reversal_plugged_to_ap),
     # Too large, however right.
     _case("unbalanced_over_row_limit", _UJ, "change_limits", _pad),
     _case("duplicate_over_row_limit", _DI, "change_limits", _pad),
@@ -316,7 +386,6 @@ BAD_FIXES: list[FixCase] = [
     _case("unbalanced_noop", _UJ, "resolution", _noop_on_target),
     _case("unbalanced_half_corrected", _UJ, "resolution", _half_delta),
     _case("unbalanced_corrected_the_wrong_way", _UJ, "resolution", _unbalanced_wrong_way),
-    _case("unbalanced_void_with_no_journal", _UJ, "resolution", _void_only),
     _case("unbalanced_corrects_a_healthy_journal", _UJ, "resolution", _noop_on_healthy),
     _case("duplicate_voided_but_not_reversed", _DI, "resolution", _dup_void_only),
     _case("duplicate_reversed_but_not_voided", _DI, "resolution", _dup_reverse_only),
@@ -329,6 +398,7 @@ BAD_FIXES: list[FixCase] = [
     _case("mismatch_ap_line_only", _AG, "resolution", _ap_line_only),
     _case("mismatch_expense_line_only", _AG, "resolution", _expense_line_only),
     _case("mismatch_half_corrected", _AG, "resolution", _half_delta),
+    _case("mismatch_corrects_a_healthy_invoice", _AG, "resolution", _noop_on_healthy_invoice),
     _case("closed_noop", _CP, "resolution", _noop_on_target),
     _case("closed_reversal_drops_a_leg", _CP, "resolution", _closed_drop_a_leg),
     _case("closed_corrects_a_healthy_journal", _CP, "resolution", _noop_on_healthy),
@@ -336,11 +406,7 @@ BAD_FIXES: list[FixCase] = [
     _case("invalid_credit_with_no_debit", _IA, "resolution", _invalid_one_sided),
     _case("invalid_corrects_a_healthy_journal", _IA, "resolution", _noop_on_healthy),
     # Resolves the fault and breaks something else.
-    _case("unbalanced_also_voids_a_paid_invoice", _UJ, "collateral", _plus_void("P")),
     _case("duplicate_voids_the_paid_original", _DI, "collateral", _dup_void_paid_original),
-    _case("mismatch_also_voids_an_open_invoice", _AG, "collateral", _plus_void("O")),
-    _case("closed_also_voids_a_paid_invoice", _CP, "collateral", _plus_void("P")),
-    _case("invalid_also_voids_an_open_invoice", _IA, "collateral", _plus_void("O")),
 ]
 
 

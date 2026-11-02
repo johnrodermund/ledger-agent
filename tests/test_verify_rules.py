@@ -130,14 +130,20 @@ def faulted_kinds(db):
         return {v.kind for v in global_violations(conn)}
 
 
-def find_ap_unbalanced(loaded):
-    """A scenario whose unbalanced journal is an invoice journal."""
+def find_unbalanced(loaded, on_invoice):
+    """A scenario whose unbalanced journal is, or is not, an invoice journal."""
     for seed in range(1, 21):
         name, dataset, answers = loaded(spec({FaultType.UNBALANCED_JOURNAL: 1}, seed=seed))
         fault = answers.faults[0]
-        if any(r.table == "APINVH" for r in fault.rows):
+        if any(r.table == "APINVH" for r in fault.rows) == on_invoice:
             return name, dataset, fault
-    pytest.fail("no seed planted an unbalanced invoice journal")
+    pytest.fail("no seed planted that kind of unbalanced journal")
+
+
+def ap_plug(fault):
+    """The true correction's amount and side, on the AP control account."""
+    wanted = true_up(fault)[0]
+    return (debit if wanted.dr_amt else credit)(AP_CONTROL, wanted.dr_amt or wanted.cr_amt)
 
 
 # Resolution
@@ -165,13 +171,12 @@ def test_correcting_a_journal_that_was_never_faulted_fails_resolution(db_with_fa
     assert_rejected(db, fault, fix, "resolution", "clears no")
 
 
-@pytest.mark.parametrize("fault_type", [t for t in FaultType
-                                        if t is not FaultType.DUPLICATE_INVOICE])
-def test_status_change_alone_fails_resolution(fault_type, loaded):
-    db, _, answers = loaded(spec({fault_type: 1, FaultType.DUPLICATE_INVOICE: 1}))
-    fault = next(f for f in answers.faults if f.type is fault_type)
-    duplicate = next(f for f in answers.faults if f.type is FaultType.DUPLICATE_INVOICE)
-    assert_rejected(db, fault, correction(None, status=duplicate.expected_status), "resolution")
+def test_no_op_on_a_healthy_invoice_journal_fails_resolution(db_with_fault):
+    db, dataset, fault = db_with_fault(FaultType.AP_GL_MISMATCH)
+    cited = {r.key for r in fault.rows if r.table == "GLJRNH"}
+    healthy = next(i["JRNL_NO"] for i in dataset.tables["APINVH"] if i["JRNL_NO"] not in cited)
+    fix = correction(healthy, [debit("5100", "10.00"), credit("5100", "10.00")])
+    assert_rejected(db, fault, fix, "resolution", "clears no")
 
 
 def test_void_without_reversal_fails_resolution(db_with_fault):
@@ -247,18 +252,8 @@ def test_fix_introducing_new_violation_fails_collateral(db_with_fault):
 
 
 def test_plugging_an_invoice_journal_to_ap_fails_collateral(loaded):
-    db, _, fault = find_ap_unbalanced(loaded)
-    wanted = true_up(fault)[0]
-    plug = (debit if wanted.dr_amt else credit)(AP_CONTROL, wanted.dr_amt or wanted.cr_amt)
-    assert_rejected(db, fault, correction(journal(fault), [plug]), "collateral", "ap_gl_mismatch")
-
-
-def test_voiding_an_unrelated_open_invoice_fails_collateral(db_with_fault):
-    db, dataset, fault = db_with_fault(FaultType.AP_GL_MISMATCH)
-    cited = {r.key for r in fault.rows if r.table == "APINVH"}
-    unrelated = next(i["INV_ID"] for i in dataset.tables["APINVH"]
-                     if i["STAT_CD"] == "O" and i["INV_ID"] not in cited)
-    fix = correction(journal(fault), true_up(fault), [unrelated])
+    db, _, fault = find_unbalanced(loaded, on_invoice=True)
+    fix = correction(journal(fault), [ap_plug(fault)])
     assert_rejected(db, fault, fix, "collateral", "ap_gl_mismatch")
 
 
@@ -310,6 +305,45 @@ def test_corrected_closed_posting_no_longer_counts(db_with_fault):
 
 
 # Structure rules added with the resolution checks
+
+@pytest.mark.parametrize("fault_type", [t for t in FaultType
+                                        if t is not FaultType.DUPLICATE_INVOICE])
+def test_status_change_is_refused_outside_a_duplicate_finding(fault_type, loaded):
+    db, _, answers = loaded(spec({fault_type: 1, FaultType.DUPLICATE_INVOICE: 1}))
+    fault = next(f for f in answers.faults if f.type is fault_type)
+    duplicate = next(f for f in answers.faults if f.type is FaultType.DUPLICATE_INVOICE)
+    fix = correction(None, status=duplicate.expected_status)
+    assert_rejected(db, fault, fix, "structure", "status")
+
+
+def test_void_cannot_hide_behind_an_existing_mismatch(loaded):
+    """The void adds no new violation, so collateral alone would let it through."""
+    for seed in range(1, 21):
+        db, _, answers = loaded(spec({FaultType.UNBALANCED_JOURNAL: 1,
+                                      FaultType.AP_GL_MISMATCH: 1}, seed=seed))
+        fault, mismatch = answers.faults
+        invoice = next(r.key for r in mismatch.rows if r.table == "APINVH")
+        with connect_rw(db) as conn:
+            stat_cd = conn.execute('SELECT "STAT_CD" FROM "APINVH" WHERE "INV_ID" = %s',
+                                   (invoice,)).fetchone()[0]
+        if stat_cd == "O":
+            fix = correction(journal(fault), true_up(fault), [invoice])
+            assert_rejected(db, fault, fix, "structure", "status")
+            return
+    pytest.fail("no seed planted a mismatch on an open invoice")
+
+
+def test_manual_journal_cannot_post_to_the_ap_account(loaded):
+    db, _, fault = find_unbalanced(loaded, on_invoice=False)
+    fix = correction(journal(fault), [ap_plug(fault)])
+    assert_rejected(db, fault, fix, "structure", "AP-sourced")
+
+
+def test_invoice_journal_may_post_to_the_ap_account(db_with_fault):
+    db, _, fault = db_with_fault(FaultType.AP_GL_MISMATCH)
+    assert any(ln.acct_cd == code(AP_CONTROL) for ln in true_up(fault))
+    assert run(db, fault, correct_fix(fault)).passed
+
 
 def test_rejects_voiding_an_invoice_that_is_already_void(db_with_fault):
     db, _, fault = db_with_fault(FaultType.DUPLICATE_INVOICE)

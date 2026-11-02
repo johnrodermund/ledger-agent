@@ -88,6 +88,11 @@ def db(scenario):
         admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
+def finding_for(fix):
+    """Only a duplicate finding may change a status, so it carries those corrections."""
+    return finding(FaultType.DUPLICATE_INVOICE) if fix.status_changes else finding()
+
+
 def primary_journal(fault):
     return next(r.key for r in fault.rows if r.table == "GLJRNH")
 
@@ -115,14 +120,14 @@ def row_counts(db):
 
 
 def assert_rejected(db, fix, check, expect=""):
-    result = verify(db, finding(), fix)
+    result = verify(db, finding_for(fix), fix)
     assert (result.passed, result.check) == (False, check), result
     assert expect in result.reason
     return result
 
 
 def assert_passes(db, fix):
-    result = verify(db, finding(), fix)
+    result = verify(db, finding_for(fix), fix)
     assert (result.passed, result.check) == (True, "ok"), result
 
 
@@ -280,6 +285,15 @@ def test_allows_status_change_without_lines(db, key):
     assert_passes(db, correction(plain_journal(key), status=[invoice]))
 
 
+@pytest.mark.parametrize("fault_type", [t for t in FaultType
+                                        if t is not FaultType.DUPLICATE_INVOICE])
+def test_only_a_duplicate_finding_may_change_a_status(db, key, fault_type):
+    fix = correction(plain_journal(key), [debit()], [duplicate_invoice(key)])
+    result = verify(db, finding(fault_type), fix)
+    assert (result.passed, result.check) == (False, "structure")
+    assert "status" in result.reason
+
+
 def test_rejects_unknown_invoice(db, key):
     fix = correction(plain_journal(key), [debit()], [99_999_999])
     assert_rejected(db, fix, "structure", "99999999")
@@ -358,7 +372,7 @@ def test_always_rolls_back(db, key):
     invoice = duplicate_invoice(key)
     fix = correction(plain_journal(key), [debit()], [invoice])
     before = row_counts(db)
-    assert verify(db, finding(), fix).passed
+    assert verify(db, finding_for(fix), fix).passed
     assert row_counts(db) == before
     with connect_admin(db) as conn:
         stat = conn.execute('SELECT "STAT_CD" FROM "APINVH" WHERE "INV_ID" = %s',

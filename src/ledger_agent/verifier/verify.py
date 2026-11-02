@@ -15,8 +15,13 @@ from decimal import Decimal
 import psycopg
 
 from ledger_agent.db import connect_rw
-from ledger_agent.models import Correction, CorrectionLine, Finding
-from ledger_agent.verifier.invariants import Violation, global_violations, group_net
+from ledger_agent.models import Correction, CorrectionLine, FaultType, Finding
+from ledger_agent.verifier.invariants import (
+    AP_ACCOUNT,
+    Violation,
+    global_violations,
+    group_net,
+)
 from ledger_agent.verifier.render import Statement, render
 from ledger_agent.verifier.rules import check_resolved
 
@@ -90,6 +95,12 @@ def _bad_account_problem(lines: list[CorrectionLine], active: dict[str, str],
     return None
 
 
+def _has_ap_source(conn: psycopg.Connection, jrnl_no: int) -> bool:
+    return conn.execute(
+        'SELECT 1 FROM "GLJRNH" WHERE coalesce("REF_JRNL_NO", "JRNL_NO") = %s '
+        'AND "SRC_CD" = %s LIMIT 1', (jrnl_no, "AP")).fetchone() is not None
+
+
 def _structure_problem(trial: _Trial) -> str | None:
     conn, correction = trial.conn, trial.correction
     lines, changes = correction.lines, correction.status_changes
@@ -97,6 +108,8 @@ def _structure_problem(trial: _Trial) -> str | None:
 
     if trial.finding.type == "other":
         return "a finding of type other cannot be corrected"
+    if changes and trial.finding.type != FaultType.DUPLICATE_INVOICE:
+        return f"a finding of type {trial.finding.type} cannot change an invoice status"
     if not lines and not changes:
         return "correction changes nothing: it has no lines and no status changes"
     if original is None and not changes:
@@ -125,6 +138,10 @@ def _structure_problem(trial: _Trial) -> str | None:
     problem = _bad_account_problem(lines, active, net, original)
     if problem:
         return problem
+    if any(line.acct_cd.rstrip() == AP_ACCOUNT for line in lines) and not _has_ap_source(
+            conn, original):
+        return f"journal {original} has no AP-sourced journal, " \
+               f"so it cannot post to account {AP_ACCOUNT}"
 
     if lines:
         prd_id = lines[0].prd_id
