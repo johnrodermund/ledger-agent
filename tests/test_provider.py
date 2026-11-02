@@ -82,11 +82,25 @@ def test_parses_text_tool_calls_usage_and_stop_reason():
         input_tokens=11, output_tokens=7, stop_reason="tool_use")
 
 
-def test_skips_blocks_it_does_not_use():
+def test_keeps_thinking_blocks_and_passes_them_back_unchanged():
+    blocks = [
+        {"type": "thinking", "thinking": "checking balances", "signature": "s1"},
+        {"type": "tool_use", "id": "t1", "name": "run_sql", "input": {"sql": "select 1"}},
+        {"type": "thinking", "thinking": "now duplicates", "signature": "s2"},
+        {"type": "tool_use", "id": "t2", "name": "run_sql", "input": {"sql": "select 2"}}]
+    provider, _ = replying(message(blocks, "tool_use"))
+    resp = provider.complete(REQ)
+    assert resp.text == "" and [c.id for c in resp.tool_calls] == ["t1", "t2"]
+    assert assistant_message(resp) == {"role": "assistant", "content": blocks}
+
+
+def test_a_reply_without_thinking_keeps_the_built_message():
     provider, _ = replying(message([
-        {"type": "thinking", "thinking": "working on it", "signature": "s"},
-        {"type": "text", "text": "done"}]))
-    assert provider.complete(REQ).text == "done"
+        {"type": "tool_use", "id": "t1", "name": "run_sql", "input": {"sql": "select 1"}},
+        {"type": "text", "text": "done"}], "tool_use"))
+    resp = provider.complete(REQ)
+    assert resp.content is None
+    assert [b["type"] for b in assistant_message(resp)["content"]] == ["text", "tool_use"]
 
 
 @pytest.mark.parametrize("stop_reason", ["max_tokens", "refusal", "end_turn"])

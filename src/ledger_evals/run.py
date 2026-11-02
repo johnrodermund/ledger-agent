@@ -1,6 +1,6 @@
 """Run the agent across the eval scenarios and score it against each answer key.
 
-python -m ledger_evals.run (--split dev|holdout|injection|all | --scenario ID) --out DIR
+python -m ledger_evals.run (--split dev|holdout|fresh|injection|all | --scenario ID) --out DIR
 
 Each scenario loads into its own database and records under its own namespace, with
 a fresh client, because the token budget compares against a client's lifetime total.
@@ -23,7 +23,7 @@ from ledger_agent.agent.graph import audit
 from ledger_agent.agent.state import AuditResult, Deps
 from ledger_agent.erp.faults import build_scenario
 from ledger_agent.erp.load import load
-from ledger_agent.llm.client import DEFAULT_MODEL, client_from_env
+from ledger_agent.llm.client import MODEL, client_from_env
 from ledger_agent.models import AnswerKey, ScenarioSpec
 from ledger_agent.report import write_report
 from ledger_evals.scenarios import SCENARIOS_PATH, load_scenarios
@@ -32,7 +32,7 @@ from ledger_evals.score import ScenarioScore, Tally, aggregate, score
 THRESHOLDS_PATH = SCENARIOS_PATH.with_name("thresholds.json")
 HIGHER_IS_BETTER = ("recall", "precision", "fix_validity", "end_to_end_fix_rate")
 LOWER_IS_BETTER = ("decoy_false_alarm_rate", "needs_human_rate")
-SPLITS = ("dev", "holdout", "injection")
+SPLITS = ("dev", "holdout", "fresh", "injection")
 
 
 @dataclass
@@ -146,7 +146,7 @@ def build_results(runs: list[ScenarioRun], scores: dict[str, ScenarioScore],
                   missed: list[str]) -> dict:
     return {
         "llm_mode": runs[0].llm_mode,
-        "model": DEFAULT_MODEL,
+        "model": MODEL,
         "headline": {"label": summary.label, **summary.headline.model_dump(mode="json")},
         "aggregates": {name: t.model_dump(mode="json") for name, t in summary.aggregates.items()},
         "scenarios": [
@@ -208,7 +208,7 @@ def _misses(run: ScenarioRun, one: ScenarioScore) -> list[str]:
 def render_markdown(runs: list[ScenarioRun], scores: dict[str, ScenarioScore],
                     requested: list[ScenarioSpec], summary: Summary, missed: list[str]) -> str:
     md = ["# LedgerAgent eval results", "",
-          f"LLM mode: {runs[0].llm_mode}. Model: {DEFAULT_MODEL}.", "",
+          f"LLM mode: {runs[0].llm_mode}. Model: {MODEL}.", "",
           f"## {summary.label}", "", *_metric_rows(summary.headline), "",
           "Each fault credits one finding at most, and a surplus finding counts as incorrect. "
           "Fix validity is over credited findings with a verified outcome. Verified but wrong "

@@ -281,3 +281,27 @@ def test_a_recording_made_before_caching_replays_with_no_cache_counts(tmp_path):
     client = ModelClient(ExplodingProvider(), "replay", tmp_path, namespace="ns")
     client.complete(REQ)
     assert client.calls == [(10, 5, 0, 0)]
+
+
+def test_model_comes_from_ledger_model_or_defaults_to_sonnet(monkeypatch):
+    from ledger_agent.llm import client as client_module
+    monkeypatch.delenv("LEDGER_MODEL", raising=False)
+    assert client_module.model_from_env() == "claude-sonnet-5-5"
+    monkeypatch.setenv("LEDGER_MODEL", "claude-haiku-5-5")
+    assert client_module.model_from_env() == "claude-haiku-5-5"
+    monkeypatch.setenv("LEDGER_MODEL", "claude-unknown")
+    with pytest.raises(ValueError, match="LEDGER_MODEL"):
+        client_module.model_from_env()
+
+
+class ThinkingProvider:
+    def complete(self, req):
+        return ModelResponse(text="", input_tokens=1, output_tokens=1, content=[
+            {"type": "thinking", "thinking": "note", "signature": "s"},
+            {"type": "text", "text": "x"}])
+
+
+def test_thinking_blocks_survive_record_and_replay(tmp_path):
+    ModelClient(ThinkingProvider(), "record", tmp_path, namespace="ns").complete(REQ)
+    resp = ModelClient(ExplodingProvider(), "replay", tmp_path, namespace="ns").complete(REQ)
+    assert resp.content[0] == {"type": "thinking", "thinking": "note", "signature": "s"}

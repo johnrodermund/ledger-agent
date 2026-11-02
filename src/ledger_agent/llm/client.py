@@ -16,18 +16,31 @@ from typing import Any, Callable, Literal, Protocol
 
 from ledger_agent.llm.recording import load_recording, recording_exists, save_recording
 
-DEFAULT_MODEL = "claude-haiku-5-5"
+DEFAULT_MODEL = "claude-sonnet-5-5"
 API_MAX_RETRIES = 6  # seven attempts, about five minutes of backoff in all
 BACKOFF_BASE_SECONDS = 5.0
 MAX_RETRY_WAIT_SECONDS = 600.0
 DEFAULT_MAX_TOKENS = 16000
-# Thinking is off on every model, so no thinking block is ever passed back. Each model
-# spells that differently and refuses the other's spelling.
+# The lowest thinking setting each model accepts; each refuses the other's spelling.
+# Sonnet's between_tools still returns its notes between tool calls as thinking blocks,
+# which are passed back unchanged.
 THINKING_BY_MODEL = {
     "claude-haiku-5-5": {"type": "disabled"},  # accepted at the default effort, medium
     "claude-sonnet-5-5": {"type": "between_tools"},
 }
 
+
+
+def model_from_env() -> str:
+    """LEDGER_MODEL, or the default. Recordings are keyed by model, so each model's
+    results replay from its own recordings."""
+    model = os.environ.get("LEDGER_MODEL") or DEFAULT_MODEL
+    if model not in THINKING_BY_MODEL:
+        raise ValueError(f"unknown LEDGER_MODEL {model!r}; use one of {sorted(THINKING_BY_MODEL)}")
+    return model
+
+
+MODEL = model_from_env()
 CACHE = {"type": "ephemeral"}  # 5 minutes: a stage's turns are seconds apart
 
 Mode = Literal["replay", "record", "live"]
@@ -59,6 +72,9 @@ class ModelResponse:
     stop_reason: str | None = None
     cache_write_tokens: int = 0
     cache_read_tokens: int = 0
+    # The reply's blocks exactly as sent, kept only when it has thinking blocks, which
+    # must go back unchanged and in place. None rebuilds the message from text and calls.
+    content: list[dict[str, Any]] | None = None
 
     @property
     def prompt_tokens(self) -> int:
@@ -80,6 +96,8 @@ class Provider(Protocol):
 
 def assistant_message(resp: ModelResponse) -> dict[str, Any]:
     """The neutral-format assistant message for a response, to append to history."""
+    if resp.content is not None:
+        return {"role": "assistant", "content": list(resp.content)}
     content: list[dict[str, Any]] = []
     if resp.text:
         content.append({"type": "text", "text": resp.text})
@@ -166,6 +184,8 @@ class AnthropicProvider:
             stop_reason=msg.stop_reason,
             cache_write_tokens=msg.usage.cache_creation_input_tokens or 0,
             cache_read_tokens=msg.usage.cache_read_input_tokens or 0,
+            content=[b.model_dump(mode="json", exclude_none=True) for b in msg.content]
+            if any(b.type in ("thinking", "redacted_thinking") for b in msg.content) else None,
         )
 
 
@@ -236,6 +256,7 @@ def _response_from_dict(d: dict[str, Any]) -> ModelResponse:
         stop_reason=d["stop_reason"],
         cache_write_tokens=d.get("cache_write_tokens", 0),  # absent before caching
         cache_read_tokens=d.get("cache_read_tokens", 0),
+        content=d.get("content"),
     )
 
 

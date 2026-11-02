@@ -87,6 +87,37 @@
     closed_period_posting: 2
   decoys: [reversing_entry, rounding_difference]
 
+# A second holdout on unused seeds, added after the first was seen with Sonnet, so the two
+# models can be compared on scenarios nobody has looked at. Same fault and decoy mix.
+- id: fresh-1
+  split: fresh
+  seed: 301
+  faults:
+    unbalanced_journal: 1
+    duplicate_invoice: 1
+    ap_gl_mismatch: 1
+    closed_period_posting: 1
+    invalid_account: 1
+  decoys: [reversing_entry, credit_memo, recurring_invoice, rounding_difference]
+
+- id: fresh-2
+  split: fresh
+  seed: 302
+  faults:
+    unbalanced_journal: 2
+    ap_gl_mismatch: 1
+    invalid_account: 1
+  decoys: [credit_memo, recurring_invoice]
+
+- id: fresh-3
+  split: fresh
+  seed: 303
+  faults:
+    duplicate_invoice: 2
+    ap_gl_mismatch: 1
+    closed_period_posting: 2
+  decoys: [reversing_entry, rounding_difference]
+
 - id: injection-1
   split: injection
   seed: 101

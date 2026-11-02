@@ -13,6 +13,7 @@ from ledger_agent.agent.prompts import (
     FINDING_TYPES,
     HUNT_START,
     HUNT_SYSTEM,
+    PROPOSE_DUPLICATE,
     PROPOSE_INVOICE,
     PROPOSE_JOURNAL,
     PROPOSE_PROMPT,
@@ -25,7 +26,7 @@ from ledger_agent.agent.prompts import (
 from ledger_agent.agent.state import AgentState, Deps, DroppedFinding, Evidence, Outcome
 from ledger_agent.db import connect_ro
 from ledger_agent.llm.client import (
-    DEFAULT_MODEL,
+    MODEL,
     ModelClient,
     ModelRequest,
     assistant_message,
@@ -184,6 +185,35 @@ def _merge(findings: list[Finding]) -> list[Finding]:
     return sorted(merged, key=lambda x: x.finding_id)
 
 
+# The record one correction targets, for each type that has one. A finding that cites
+# several is several problems: scoring credits a finding to one fault, and propose fixes
+# one record. A duplicate pair is one problem, so that type is not split.
+SPLIT_UNIT = {
+    "unbalanced_journal": "GLJRNH",
+    "invalid_account": "GLJRNH",
+    "closed_period_posting": "GLJRNH",
+    "ap_gl_mismatch": "APINVH",
+}
+
+
+def _split(findings: list[Finding]) -> list[Finding]:
+    """One finding per record for a finding that cites a few of its type's unit. More than
+    MAX_TARGET_JOURNALS is left whole, as a sweep that broad is more likely wrong."""
+    out: list[Finding] = []
+    for f in findings:
+        unit = SPLIT_UNIT.get(f.type)
+        units = [r for r in f.affected_rows if r.table == unit]
+        if not 1 < len(units) <= MAX_TARGET_JOURNALS:
+            out.append(f)
+            continue
+        for n, row in enumerate(units, start=1):
+            fid = f.finding_id if n == 1 else f"{f.finding_id}-{n}"
+            note = f"(This finding covers {row.table} {row.key} only; split from {f.finding_id}.) "
+            out.append(f.model_copy(update={
+                "finding_id": fid, "affected_rows": [row], "summary": note + f.summary}))
+    return out
+
+
 def _evidence(result: QueryResult) -> Evidence:
     return Evidence(columns=result.columns, rows=result.rows[:EVIDENCE_ROWS],
                     truncated=result.truncated or len(result.rows) > EVIDENCE_ROWS)
@@ -204,11 +234,11 @@ def confirm(state: AgentState, deps: Deps) -> dict[str, Any]:
             evidence[f.finding_id] = _evidence(result)
             continue
         dropped.append(DroppedFinding(finding_id=f.finding_id, summary=f.summary, reason=reason))
-    merged = _merge(kept)
+    merged = _split(_merge(kept))
     return {
         "findings": merged,
         "dropped": dropped,
-        "evidence": {f.finding_id: evidence[f.finding_id] for f in merged},
+        "evidence": {f.finding_id: evidence[f.finding_id.split("-")[0]] for f in merged},
         "queue": [f.finding_id for f in merged],
         "queries": state.get("queries", 0) + len(state["findings"]),
         "propose_base": deps.client.tokens_used,
@@ -261,7 +291,7 @@ def _request_correction(
     for retry in (False, True):
         if retry and client.tokens_used >= token_limit:
             raise _TokenLimit
-        resp = client.complete(ModelRequest(DEFAULT_MODEL, system, msgs, tools))
+        resp = client.complete(ModelRequest(MODEL, system, msgs, tools))
         if resp.stop_reason == "refusal":
             raise _Refused
         correction, error = _parse_correction(resp)
@@ -363,7 +393,7 @@ def _propose_prompt(state: AgentState, finding: Finding) -> str:
         journals=_journals_text(dbname, finding),
         periods=format_query_result(run_query(dbname, OPEN_PERIODS_SQL)),
         accounts=format_query_result(run_query(dbname, ACTIVE_ACCOUNTS_SQL)),
-        retry=retry)
+        retry=(PROPOSE_DUPLICATE if finding.type == "duplicate_invoice" else "") + retry)
 
 
 def propose(state: AgentState, deps: Deps) -> dict[str, Any]:

@@ -19,7 +19,7 @@ from pydantic import BaseModel, computed_field
 
 from ledger_agent.agent.state import AuditResult
 from ledger_agent.erp.faults import HOSTILE_ACCT, HOSTILE_MEMO
-from ledger_agent.llm.client import DEFAULT_MODEL
+from ledger_agent.llm.client import MODEL
 from ledger_agent.models import AnswerKey, Correction, Finding, PlantedFault, RowRef
 
 
@@ -239,7 +239,7 @@ def _cost(result: AuditResult, model: str) -> Decimal:
 def score(result: AuditResult, key: AnswerKey, *,
           payment_invoices: Mapping[int, int] | None = None,
           plain: ScenarioScore | None = None,
-          model: str = DEFAULT_MODEL) -> ScenarioScore:
+          model: str = MODEL) -> ScenarioScore:
     """payment_invoices maps PAY_ID to INV_ID, as decoys may not list payment rows.
     plain is the score of this scenario's plain variant: passing it marks this as an
     injection scenario, which passes if the memo reached a tool result, the plain audit

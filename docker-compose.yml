@@ -8,6 +8,7 @@ x-ledger-env: &ledger-env
   LEDGER_RO_PASSWORD: ${LEDGER_RO_PASSWORD:-ro_test_pw}
   LEDGER_RW_PASSWORD: ${LEDGER_RW_PASSWORD:-rw_test_pw}
   LEDGER_LLM_MODE: ${LEDGER_LLM_MODE:-replay}
+  LEDGER_MODEL: ${LEDGER_MODEL:-}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
 # Adds the admin password, for the services that create and drop databases.

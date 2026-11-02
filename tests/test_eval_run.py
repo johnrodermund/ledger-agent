@@ -32,10 +32,11 @@ def split(name):
 
 def test_scenarios_file_has_required_split_and_coverage():
     assert [s.id for s in SCENARIOS] == [
-        *(f"dev-{n}" for n in range(1, 7)), *(f"holdout-{n}" for n in range(1, 4)), "injection-1"]
+        *(f"dev-{n}" for n in range(1, 7)), *(f"holdout-{n}" for n in range(1, 4)),
+        *(f"fresh-{n}" for n in range(1, 4)), "injection-1"]
     assert {s.id: s.split for s in SCENARIOS} == {
         s.id: s.id.split("-")[0] for s in SCENARIOS}
-    for name in ("dev", "holdout"):
+    for name in ("dev", "holdout", "fresh"):
         assert {t for s in split(name) for t, n in s.faults.items() if n} == set(FaultType)
         assert {d for s in split(name) for d in s.decoys} == set(DecoyType)
     for spec in SCENARIOS:
@@ -282,7 +283,7 @@ def test_one_holdout_scenario_is_not_labelled_the_holdout_aggregate(tmp_path, fa
 def test_incomplete_scenarios_reach_the_headline_and_miss_thresholds(tmp_path, fake_clients):
     scripts, _ = fake_clients
     script = script_for(BY_ID["dev-2"])
-    script[1].input_tokens = 200_000  # spends the budget, so no fix is proposed
+    script[1].input_tokens = 1_000_000  # spends any model's budget, so no fix is proposed
     scripts["dev-2"] = script
     code, out = invoke(tmp_path, "--scenario", "dev-2",
                        thresholds=thresholds_file(tmp_path, {"recall": 0.5}))
@@ -511,3 +512,8 @@ def test_replay_without_recordings_aborts(tmp_path, monkeypatch):
         assert code != 0
     finally:
         drop(db_name("dev-3"))
+
+
+def test_fresh_seeds_differ_from_every_other_split():
+    others = {s.seed for s in SCENARIOS if s.split != "fresh"}
+    assert len(split("fresh")) == 3 and not {s.seed for s in split("fresh")} & others

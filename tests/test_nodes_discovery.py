@@ -336,11 +336,17 @@ def test_explore_stores_notes(db, tmp_path):
 
 
 def test_limits_split_the_token_limit_between_stages():
-    limits = Limits()
-    assert limits.tokens == 300_000
+    limits = Limits(tokens=300_000)
     assert (limits.explore_tokens, limits.hunt_tokens, limits.propose_tokens) == (
         75_000, 105_000, 120_000)
     assert Limits(tokens=1000).hunt_tokens == 350
+
+
+def test_the_default_token_limit_depends_on_the_model():
+    from ledger_agent.agent.state import TOKEN_LIMITS
+    from ledger_agent.llm.client import MODEL
+    assert TOKEN_LIMITS == {"claude-haiku-5-5": 300_000, "claude-sonnet-5-5": 600_000}
+    assert Limits().tokens == TOKEN_LIMITS[MODEL]
 
 
 def test_explore_keeps_notes_when_its_token_budget_runs_out(db, tmp_path):
@@ -492,3 +498,66 @@ def test_loop_sends_a_field_of_the_wrong_type_back_to_the_model(db, tmp_path):
     assert result.submitted == {"findings": []}
     (res,) = tool_results(provider.requests[1])
     assert res["is_error"] and "findings must be a JSON array" in res["content"]
+
+
+def thinking_reply(*calls):
+    blocks = [{"type": "thinking", "thinking": "note", "signature": "s"}]
+    blocks += [{"type": "tool_use", "id": c.id, "name": c.name, "input": c.arguments}
+               for c in calls]
+    return ModelResponse(text="", tool_calls=list(calls), content=blocks)
+
+
+def test_a_forced_turn_keeps_system_and_tools_once_thinking_is_in_the_history(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        thinking_reply(sql_call(GOOD_SQL, "a")), reply(notes_call())])
+    result = loop(client, db, query_limit=1)
+    assert result.submitted == {"notes": "notes"} and result.limit_hit
+    first, forced = provider.requests
+    assert forced.system == first.system and forced.tools == first.tools
+    assert forced.tool_choice is None
+    note = forced.messages[-1]["content"][-1]
+    assert note["type"] == "text" and "`submit_schema_notes`" in note["text"]
+    assert forced.messages[1]["content"][0]["type"] == "thinking"
+
+
+def test_a_forced_turn_keeps_its_first_shape_when_thinking_appears_later(db, tmp_path):
+    client, provider = make_client(tmp_path, [
+        reply(sql_call(GOOD_SQL, "a")),
+        ModelResponse(text="", content=[
+            {"type": "thinking", "thinking": "note", "signature": "s"}]),  # no submission
+        reply(notes_call())])
+    loop(client, db, query_limit=1)
+    _, forced, retry = provider.requests
+    assert [t["name"] for t in forced.tools] == ["submit_schema_notes"]
+    assert retry.tools == forced.tools and retry.tool_choice == forced.tool_choice
+
+
+def test_confirm_splits_a_finding_that_groups_several_journals(db, tmp_path):
+    out = run_confirm(db, tmp_path, [
+        f("F001", "unbalanced_journal", [("GLJRNH", 5), ("GLJRNH", 9)]),
+        f("F002", "invalid_account", [("GLJRNH", 3)])])
+    findings = out["findings"]
+    assert [x.finding_id for x in findings] == ["F001", "F001-2", "F002"]
+    assert [x.affected_rows for x in findings[:2]] == [
+        [RowRef(table="GLJRNH", key=5)], [RowRef(table="GLJRNH", key=9)]]
+    assert "GLJRNH 9 only" in findings[1].summary and findings[1].summary.endswith("F001")
+    assert out["queue"] == ["F001", "F001-2", "F002"]
+    assert out["evidence"]["F001-2"] == out["evidence"]["F001"]
+
+
+def test_confirm_splits_tie_out_findings_by_invoice_and_keeps_their_other_rows_apart(db, tmp_path):
+    out = run_confirm(db, tmp_path, [
+        f("F001", "ap_gl_mismatch", [("APINVH", 7), ("APPAYM", 4), ("APINVH", 8)])])
+    assert [x.affected_rows for x in out["findings"]] == [
+        [RowRef(table="APINVH", key=7)], [RowRef(table="APINVH", key=8)]]
+
+
+@pytest.mark.parametrize("finding", [
+    f("F001", "duplicate_invoice", [("APINVH", 1), ("APINVH", 2)]),  # a pair is the unit
+    f("F001", "other", [("GLJRNH", 1), ("GLJRNH", 2)]),
+    f("F001", "ap_gl_mismatch", [("APPAYM", 4), ("APINVH", 7)]),
+    f("F001", "unbalanced_journal", [("GLJRNH", k) for k in range(1, 8)]),  # too many to split
+])
+def test_confirm_leaves_a_finding_whole_when_it_has_no_several_units(db, tmp_path, finding):
+    out = run_confirm(db, tmp_path, [finding])
+    assert [x.affected_rows for x in out["findings"]] == [finding.affected_rows]

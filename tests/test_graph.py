@@ -492,3 +492,14 @@ def test_propose_prompt_carries_a_cited_invoice_and_the_journal_that_recorded_it
     prompt = propose_prompt(db, fault, tmp_path, item)
     assert f"Invoice {inv_id}" in prompt and inv_no in prompt
     assert f"Journal {jrnl} header" in prompt
+
+
+def test_only_a_duplicate_finding_gets_the_duplicate_rule(db, fault, tmp_path):
+    plain = propose_prompt(db, fault, tmp_path)
+    assert "keep one copy" not in plain
+    with connect_admin(db) as c:
+        inv_id = c.execute('SELECT "INV_ID" FROM "APINVH" ORDER BY 1 LIMIT 1').fetchone()[0]
+    item = finding_item(fault, "duplicate_invoice") | {
+        "affected_rows": [{"table": "APINVH", "key": inv_id}]}
+    _, provider = run(db, tmp_path, [*discovery(item), *[propose_reply(true_args(fault))] * 3])
+    assert "keep one copy" in provider.requests[2].messages[0]["content"]

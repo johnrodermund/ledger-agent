@@ -92,7 +92,7 @@ class ScenarioSpec(BaseModel):
     """What to plant. faults maps each fault type to how many to plant."""
 
     id: str
-    split: Literal["dev", "holdout", "injection"]
+    split: Literal["dev", "holdout", "fresh", "injection"]
     seed: int
     faults: dict[FaultType, int]
     decoys: list[DecoyType]

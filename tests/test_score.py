@@ -506,17 +506,17 @@ def test_cost_is_exact_in_small_amounts_and_sums_exactly():
     assert aggregate([one] * 3).cost_usd == Decimal("0.000036")
 
 
-def test_default_model_is_haiku_at_its_standard_rate():
-    assert DEFAULT_MODEL == "claude-haiku-5-5"
+def test_haiku_is_priced_at_its_standard_rate():
     scored = score(audit_result(input_tokens=1_000_000, output_tokens=20_000,
-                                calls=[(50_000, 1_000, 0, 0)] * 20), answer_key())
+                                calls=[(50_000, 1_000, 0, 0)] * 20), answer_key(),
+                   model="claude-haiku-5-5")
     assert scored.cost_usd == Decimal("0.11")  # 1M in at $0.10 plus 20k out at $0.50
 
 
 def test_haiku_prices_each_long_prompt_at_the_long_rate():
     calls = [(100_000, 1_000, 0, 0), (100_001, 1_000, 0, 0)]  # the first is not over
     scored = score(audit_result(input_tokens=200_001, output_tokens=2_000, calls=calls),
-                   answer_key())
+                   answer_key(), model="claude-haiku-5-5")
     standard = Decimal(100_000) * Decimal("0.10") + Decimal(1_000) * Decimal("0.50")
     long = Decimal(100_001) * Decimal("0.50") + Decimal(1_000) * Decimal("2.50")
     assert scored.cost_usd == (standard + long) / 1_000_000
@@ -560,7 +560,11 @@ def test_cache_writes_and_reads_are_priced_apart_from_plain_input():
 def test_cached_tokens_count_toward_the_long_prompt_rate():
     calls = [(1_000, 1_000, 0, 99_001)]  # 100,001 prompt tokens, most read from cache
     scored = score(audit_result(input_tokens=100_001, output_tokens=1_000, calls=calls),
-                   answer_key())
+                   answer_key(), model="claude-haiku-5-5")
     expected = (Decimal(1_000) * Decimal("0.50") + Decimal(1_000) * Decimal("2.50")
                 + Decimal(99_001) * Decimal("0.50") * Decimal("0.1"))
     assert scored.cost_usd == expected / 1_000_000
+
+
+def test_default_model_is_sonnet():
+    assert DEFAULT_MODEL == "claude-sonnet-5-5"

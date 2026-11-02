@@ -7,8 +7,13 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel
 
-from ledger_agent.llm.client import ModelClient
+from ledger_agent.llm.client import MODEL, ModelClient
 from ledger_agent.models import Correction, Finding
+
+
+# Each model's limit for a whole run. Sonnet writes longer notes and ran out of
+# Haiku's explore budget; Haiku keeps the limit its recordings were made under.
+TOKEN_LIMITS = {"claude-haiku-5-5": 300_000, "claude-sonnet-5-5": 600_000}
 
 
 @dataclass(frozen=True)
@@ -16,7 +21,7 @@ class Limits:
     explore_queries: int = 15
     hunt_queries: int = 40
     fix_attempts: int = 3
-    tokens: int = 300_000
+    tokens: int = field(default_factory=lambda: TOKEN_LIMITS[MODEL])
 
     # Stage budgets are shares of tokens, each measured from the start of its stage.
     @property

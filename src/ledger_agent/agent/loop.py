@@ -8,7 +8,7 @@ from typing import Any
 
 from ledger_agent.agent.prompts import RUN_SQL_TOOL
 from ledger_agent.llm.client import (
-    DEFAULT_MODEL,
+    MODEL,
     ModelClient,
     ModelRequest,
     assistant_message,
@@ -61,6 +61,12 @@ def _mistyped(arguments: dict, properties: dict) -> str | None:
     return None
 
 
+def _has_thinking(messages: list[dict]) -> bool:
+    return any(isinstance(m["content"], list)
+               and any(b.get("type") in ("thinking", "redacted_thinking") for b in m["content"])
+               for m in messages if m["role"] == "assistant")
+
+
 def run_tool_loop(
     client: ModelClient,
     system: str,
@@ -84,6 +90,8 @@ def run_tool_loop(
     seen: list[str] = []  # results the model was sent, so not those of a turn that ends it
     start = client.tokens_used
     last_turn = 0
+    steered = False
+    bound: bool | None = None  # settled at the first forced turn, then kept
 
     while True:
         out_of_tokens = False
@@ -98,14 +106,29 @@ def run_tool_loop(
         elif at_limit:
             limit_hit = True
             limit_kind = limit_kind or "queries"
+        # Thinking blocks are bound to the system prompt and tools they were made under, so
+        # once one is in the history a forced turn keeps both and steers from the new user
+        # message instead. A run_sql call after that gets LIMIT_REACHED, as any late call does.
+        # The choice is made once: a block written under the narrowed tools binds to them.
+        if at_limit and bound is None:
+            bound = _has_thinking(msgs)
+        if at_limit and bound and not steered:
+            steered = True
+            last = msgs[-1]  # not yet sent: it goes out with this request
+            content = last["content"]
+            if isinstance(content, str):
+                content = [{"type": "text", "text": content}]
+            msgs[-1] = {**last, "content": [*content, {
+                "type": "text",
+                "text": f"SQL is no longer available. Respond by calling the `{submit_name}` tool."}]}
         before = client.tokens_used
         resp = client.complete(
             ModelRequest(
-                model=DEFAULT_MODEL,
+                model=MODEL,
                 system=system,
                 messages=msgs,
-                tools=[submit_schema] if at_limit else [RUN_SQL_TOOL, submit_schema],
-                tool_choice=submit_name if at_limit else None,
+                tools=[submit_schema] if at_limit and not bound else [RUN_SQL_TOOL, submit_schema],
+                tool_choice=submit_name if at_limit and not bound else None,
             )
         )
         last_turn = client.tokens_used - before
