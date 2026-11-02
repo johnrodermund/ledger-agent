@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import psycopg
 
-from ledger_agent.db import connect_rw
+from ledger_agent.db import connect_rw, raise_if_unavailable
 from ledger_agent.models import Correction, CorrectionLine, FaultType, Finding
 from ledger_agent.verifier.invariants import (
     AP_ACCOUNT,
@@ -63,7 +63,8 @@ class _Trial:
     violations_after: set[Violation] = field(default_factory=set)
 
 
-def _database_failure(e: psycopg.Error) -> VerifyResult:
+def _database_failure(e: psycopg.Error, conn: psycopg.Connection | None = None) -> VerifyResult:
+    raise_if_unavailable(e, conn)  # a dead connection ends the run, it is not a rejection
     if isinstance(e, psycopg.errors.QueryCanceled):
         return VerifyResult(False, "trial_run",
                             f"trial run exceeded the {TRIAL_TIMEOUT_MS} ms time limit")
@@ -188,7 +189,7 @@ def _trial_run(trial: _Trial) -> VerifyResult | None:
         for statement in trial.statements:
             conn.execute(statement.sql, statement.params)
     except psycopg.Error as e:
-        return _database_failure(e)
+        return _database_failure(e, trial.conn)
     return None
 
 
@@ -210,7 +211,7 @@ def _change_limits(trial: _Trial) -> VerifyResult | None:
             'SELECT count(*) FROM "APINVH" WHERE "INV_ID" = ANY(%s) AND "STAT_CD" = %s',
             ([c.inv_id for c in correction.status_changes], "V")).fetchone()[0]
     except psycopg.Error as e:
-        return _database_failure(e)
+        return _database_failure(e, trial.conn)
 
     for table in _SNAPSHOTS:
         if after[table] != trial.before[table]:
@@ -233,7 +234,7 @@ def _resolution(trial: _Trial) -> VerifyResult | None:
         problem = check_resolved(trial.conn, trial.finding, trial.correction)
         trial.violations_after = global_violations(trial.conn)
     except psycopg.Error as e:
-        return _database_failure(e)
+        return _database_failure(e, trial.conn)
     if problem is None:
         cleared = trial.violations_before - trial.violations_after
         if not any(v.kind == trial.finding.type for v in cleared):

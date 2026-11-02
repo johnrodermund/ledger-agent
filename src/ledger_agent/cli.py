@@ -8,7 +8,7 @@ import psycopg
 
 from ledger_agent.agent.graph import audit
 from ledger_agent.agent.state import Deps
-from ledger_agent.db import connect_ro
+from ledger_agent.db import DatabaseUnavailable, connect_ro
 from ledger_agent.erp.faults import build_scenario
 from ledger_agent.erp.load import load
 from ledger_agent.llm.client import TransientProviderError, client_from_env
@@ -36,7 +36,7 @@ def default_namespace(dbname: str) -> str:
 
 def _failure_types() -> tuple[type[BaseException], ...]:
     types: tuple[type[BaseException], ...] = (
-        psycopg.Error, RecordingMissing, TransientProviderError, ValueError, RuntimeError,
+        DatabaseUnavailable, psycopg.Error, RecordingMissing, TransientProviderError, ValueError, RuntimeError,
         KeyError)
     try:
         import anthropic

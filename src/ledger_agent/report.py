@@ -61,6 +61,21 @@ def _finding_section(result: AuditResult, outcome: Outcome) -> list[str]:
     return out
 
 
+def incomplete_reasons(result: AuditResult) -> list[str]:
+    """Why the audit may have missed things. A spent query budget alone does not count:
+    the model still submitted. A token limit, a loop that never submitted, or findings
+    that could not be checked do."""
+    state = result.state
+    reasons = []
+    if "tokens" in state["limits_hit"]:
+        reasons.append("the token limit was reached")
+    reasons += [f"a model loop failed ({hit.split('_failed')[0]})"
+                for hit in state["limits_hit"] if "_failed" in hit]
+    if state["dropped"]:
+        reasons.append(f"{len(state['dropped'])} submitted finding(s) were dropped")
+    return reasons
+
+
 def render_markdown(result: AuditResult) -> str:
     state = result.state
     verified = [o for o in state["outcomes"] if o.status == "verified"]
@@ -77,7 +92,11 @@ def render_markdown(result: AuditResult) -> str:
         f"- Queries run: {result.queries}",
         "",
     ]
-    if not state["findings"]:
+    reasons = incomplete_reasons(result)
+    if reasons:
+        md += [f"**The audit was incomplete**: {'; '.join(reasons)}. "
+               "An empty or short list of findings below is not a clean result.", ""]
+    elif not state["findings"]:
         md += ["No discrepancies found.", ""]
 
     md += ["## Limits hit", ""]

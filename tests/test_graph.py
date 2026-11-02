@@ -1,4 +1,5 @@
 import uuid
+import psycopg
 from decimal import Decimal
 
 import pytest
@@ -6,7 +7,8 @@ from fakes import FakeProvider, call, reply
 
 from ledger_agent.agent.graph import audit, build_graph
 from ledger_agent.agent.state import Deps, Limits
-from ledger_agent.db import connect_admin
+from ledger_agent import cli
+from ledger_agent.db import DatabaseUnavailable, connect_admin
 from ledger_agent.erp.faults import build_scenario
 from ledger_agent.erp.load import load
 from ledger_agent.llm.client import ModelClient
@@ -195,3 +197,103 @@ def test_audit_can_run_twice_on_one_deps_with_fresh_trace(db, tmp_path):
 def test_build_graph_compiles(db, tmp_path):
     deps = Deps(ModelClient(FakeProvider([]), "live", tmp_path))
     assert build_graph(deps) is not None
+
+
+@pytest.fixture(scope="module")
+def two_faults():
+    spec = ScenarioSpec(id="graph2", split="dev", seed=12,
+                        faults={FaultType.UNBALANCED_JOURNAL: 2}, decoys=[])
+    dataset, key = build_scenario(spec)
+    name = f"graph2_{uuid.uuid4().hex[:12]}"
+    load(name, dataset)
+    try:
+        yield name, key.faults
+    finally:
+        with connect_admin("postgres") as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+def test_second_finding_starts_fresh_after_a_retry(two_faults, tmp_path):
+    db, (one, two) = two_faults
+    result, provider = run(db, tmp_path, [
+        *discovery(finding_item(one), finding_item(two)),
+        propose_reply(bad_args(one)), propose_reply(true_args(one)),
+        propose_reply(true_args(two))])
+    assert [(o.finding_id, o.status, o.attempts) for o in result.state["outcomes"]] == [
+        ("F001", "verified", 2), ("F002", "verified", 1)]
+    assert "rejected" not in provider.requests[-1].messages[-1]["content"]
+
+
+def test_second_finding_starts_fresh_after_giving_up_on_the_first(two_faults, tmp_path):
+    db, (one, two) = two_faults
+    result, provider = run(db, tmp_path, [
+        *discovery(finding_item(one), finding_item(two)),
+        *[propose_reply(bad_args(one)) for _ in range(3)], propose_reply(true_args(two))])
+    assert [(o.finding_id, o.status, o.attempts) for o in result.state["outcomes"]] == [
+        ("F001", "needs_human", 3), ("F002", "verified", 1)]
+    assert "rejected" not in provider.requests[-1].messages[-1]["content"]
+
+
+# Database loss ends the run ------------------------------------------------------------
+
+
+def cli_run(db, tmp_path, monkeypatch, script):
+    provider = FakeProvider(script)
+    monkeypatch.setattr(cli, "client_from_env",
+                        lambda ns: ModelClient(provider, "live", tmp_path / "rec"))
+    out = tmp_path / "out"
+    return cli.main(["audit", "--db", db, "--out", str(out)]), out
+
+
+def assert_failed_cleanly(code, out, capsys):
+    err = capsys.readouterr().err
+    assert code == 1 and "Traceback" not in err and len(err.strip().splitlines()) == 1
+    assert not (out / "report.md").exists()
+
+
+def test_database_lost_after_hunt_ends_run_with_exit_1(db, fault, tmp_path, monkeypatch, capsys):
+    from ledger_agent.agent import graph
+    from ledger_agent.tools import sql
+
+    real_hunt = graph.hunt
+
+    def hunt_then_lose_database(state, deps):
+        update = real_hunt(state, deps)
+
+        def refuse(dbname):
+            raise DatabaseUnavailable("cannot connect to database")
+
+        monkeypatch.setattr(sql, "connect_ro", refuse)
+        return update
+
+    monkeypatch.setattr(graph, "hunt", hunt_then_lose_database)
+    code, out = cli_run(db, tmp_path, monkeypatch, discovery(finding_item(fault)))
+    assert_failed_cleanly(code, out, capsys)
+
+
+def test_connection_lost_in_verify_trial_ends_run_with_exit_1(
+        db, fault, tmp_path, monkeypatch, capsys):
+    from ledger_agent.verifier import verify as verify_module
+
+    def dead(trial):
+        raise psycopg.OperationalError("server closed the connection unexpectedly")
+
+    monkeypatch.setattr(verify_module, "_snapshot", dead)
+    code, out = cli_run(db, tmp_path, monkeypatch,
+                        [*discovery(finding_item(fault)), propose_reply(true_args(fault))])
+    assert_failed_cleanly(code, out, capsys)
+
+
+def test_query_level_errors_stay_tool_errors(db):
+    from ledger_agent.tools.sql import run_query
+
+    assert not run_query(db, 'SELECT "NO_SUCH_COLUMN" FROM "GLJRNH"').ok
+    assert not run_query(db, "SELECT pg_sleep(1)", timeout_ms=1).ok
+
+
+def test_run_query_raises_when_database_unreachable(db, monkeypatch):
+    from ledger_agent.tools.sql import run_query
+
+    monkeypatch.setenv("LEDGER_DB_PORT", "1")
+    with pytest.raises(DatabaseUnavailable):
+        run_query(db, "SELECT 1")

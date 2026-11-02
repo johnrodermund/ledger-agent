@@ -118,3 +118,34 @@ def test_cli_module_entry_point_runs():
     proc = subprocess.run([sys.executable, "-m", "ledger_agent.cli", "audit", "--help"],
                           capture_output=True, text=True)
     assert proc.returncode == 0 and "--namespace" in proc.stdout
+
+
+def no_findings_text(tmp_path, **kw):
+    write_report(make_result(**kw), tmp_path)
+    return read(tmp_path)
+
+
+def test_clean_run_says_no_discrepancies_found(tmp_path):
+    text = no_findings_text(tmp_path)
+    assert "No discrepancies found" in text and "incomplete" not in text
+
+
+def test_spent_query_budget_alone_is_still_complete(tmp_path):
+    text = no_findings_text(tmp_path, limits_hit=["hunt_queries"])
+    assert "No discrepancies found" in text
+
+
+def test_all_findings_dropped_is_not_clean(tmp_path):
+    dropped = DroppedFinding(finding_id="F001", summary="s", reason="evidence query failed")
+    text = no_findings_text(tmp_path, dropped=[dropped])
+    assert "No discrepancies found" not in text and "audit was incomplete" in text
+
+
+def test_token_limit_during_discovery_is_not_clean(tmp_path):
+    text = no_findings_text(tmp_path, limits_hit=["tokens"])
+    assert "No discrepancies found" not in text and "token limit" in text
+
+
+def test_failed_loop_is_not_clean(tmp_path):
+    text = no_findings_text(tmp_path, limits_hit=["hunt_failed: model did not submit"])
+    assert "No discrepancies found" not in text and "hunt" in text

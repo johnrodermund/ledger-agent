@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from ledger_agent.db import connect_admin
+from ledger_agent.db import DatabaseUnavailable, connect_admin
 from ledger_agent.erp.faults import INACTIVE_ACCT, MISSING_ACCT, build_scenario
 from ledger_agent.erp.generate import N_CLOSED, N_PERIODS, code
 from ledger_agent.erp.load import load
@@ -360,10 +360,12 @@ def test_timeout_is_a_failed_result(db, key, monkeypatch):
     assert_rejected(db, correction(plain_journal(key), [debit()]), "trial_run", "50 ms")
 
 
-def test_lost_connection_is_a_failed_result(db, key, monkeypatch):
+def test_lost_connection_ends_the_run_not_the_fix(db, key, monkeypatch):
     monkeypatch.setattr(RENDER, lambda fix, n: [
         Statement("SELECT pg_terminate_backend(pg_backend_pid())", ())])
-    assert_rejected(db, correction(plain_journal(key), [debit()]), "trial_run")
+    fix = correction(plain_journal(key), [debit()])
+    with pytest.raises(DatabaseUnavailable):
+        verify(db, finding_for(fix), fix)
 
 
 # verify: never commits

@@ -12,7 +12,7 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
-from ledger_agent.db import connect_ro
+from ledger_agent.db import connect_ro, raise_if_unavailable
 
 NON_DETERMINISTIC = {
     "now", "random", "current_date", "current_time", "current_timestamp",
@@ -99,6 +99,7 @@ def run_query(dbname: str, sql: str, max_rows: int = 200, timeout_ms: int = 5000
     problem = validate(sql)
     if problem:
         return _fail(problem)
+    conn = None
     try:
         with connect_ro(dbname) as conn:
             with conn.transaction():
@@ -112,6 +113,7 @@ def run_query(dbname: str, sql: str, max_rows: int = 200, timeout_ms: int = 5000
     except psycopg.errors.QueryCanceled:
         return _fail(f"query exceeded the {timeout_ms} ms time limit")
     except psycopg.Error as e:
+        raise_if_unavailable(e, conn)
         # Primary message only: no connection details, positions or hints.
         return _fail(f"database error: {e.diag.message_primary or type(e).__name__}")
     return QueryResult(

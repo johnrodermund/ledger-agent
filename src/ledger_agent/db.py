@@ -9,15 +9,40 @@ RO_ROLE = "ledger_ro"
 RW_ROLE = "ledger_rw"
 
 
+class DatabaseUnavailable(Exception):
+    """The database cannot be reached or the connection died. Unlike a query error,
+    this ends a run: nothing the run reports afterwards could be trusted."""
+
+
 def _connect(dbname: str, user: str, password: str) -> psycopg.Connection:
-    return psycopg.connect(
-        host=os.environ.get("LEDGER_DB_HOST", "localhost"),
-        port=os.environ.get("LEDGER_DB_PORT", "5432"),
-        dbname=dbname,
-        user=user,
-        password=password,
-        autocommit=True,
-    )
+    try:
+        return psycopg.connect(
+            host=os.environ.get("LEDGER_DB_HOST", "localhost"),
+            port=os.environ.get("LEDGER_DB_PORT", "5432"),
+            dbname=dbname,
+            user=user,
+            password=password,
+            autocommit=True,
+        )
+    except psycopg.OperationalError as e:
+        raise DatabaseUnavailable(
+            f"cannot connect to database {dbname!r}: {e.diag.message_primary or str(e)}") from e
+
+
+_LOST_STATES = ("57P01", "57P02", "57P03")  # admin shutdown, crash shutdown, cannot connect now
+
+
+def raise_if_unavailable(e: psycopg.Error, conn: psycopg.Connection | None = None) -> None:
+    """Raise DatabaseUnavailable if e means the connection is gone. Query-level errors
+    (syntax, permissions, timeouts, lock failures) return normally."""
+    state = e.sqlstate or ""
+    lost = state in _LOST_STATES or state.startswith("08")
+    if not lost and isinstance(e, psycopg.OperationalError) and not state:
+        lost = True  # no server error: the failure is on the connection itself
+    if not lost and conn is not None and conn.broken:
+        lost = True
+    if lost:
+        raise DatabaseUnavailable(f"lost connection to the database: {str(e).strip()}") from e
 
 
 def connect_admin(dbname: str) -> psycopg.Connection:
