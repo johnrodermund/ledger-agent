@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel
-from typing_extensions import TypedDict
 
 from ledger_agent.llm.client import ModelClient
 from ledger_agent.models import Correction, Finding

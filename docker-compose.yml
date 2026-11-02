@@ -23,6 +23,8 @@ x-app: &app
 # code 0. So a one-shot service that succeeds idles instead of exiting and reports healthy
 # through the marker file; one that fails exits non-zero, which still aborts the run.
 x-done: &done
+  # An init process passes the stop signal on, so `sleep` does not hold up shutdown.
+  init: true
   healthcheck:
     test: ["CMD-SHELL", "test -f /tmp/done"]
     # Failures count toward unhealthy: 5s x 700 is about 58 minutes, longer than the
@@ -112,6 +114,9 @@ services:
       - ./docker-compose.yml:/app/docker-compose.yml:ro
       - ./README.md:/app/README.md:ro
       - ./.env.example:/app/.env.example:ro
+      - ./Dockerfile:/app/Dockerfile:ro
+      - ./constraints.txt:/app/constraints.txt:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
       - ./.github:/app/.github:ro
 
 volumes:

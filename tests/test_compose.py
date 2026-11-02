@@ -1,3 +1,5 @@
+import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -71,6 +73,47 @@ def test_only_admin_services_get_the_admin_password():
     for name in ("seed", "evals"):
         assert "POSTGRES_PASSWORD" in _service(name)["environment"]
     assert "POSTGRES_PASSWORD" not in _service("agent")["environment"]
+
+
+def test_idling_services_stop_promptly():
+    for name in ("seed", "agent"):
+        assert _service(name)["init"] is True
+
+
+def test_python_base_image_is_pinned_to_a_patch_version():
+    assert re.search(r"^FROM python:\d+\.\d+\.\d+-slim$", Path("Dockerfile").read_text(), re.M)
+
+
+def _pins():
+    lines = [ln.strip() for ln in Path("constraints.txt").read_text().splitlines()]
+    return [ln for ln in lines if ln and not ln.startswith("#")]
+
+
+def test_constraints_pin_every_package_exactly():
+    assert _pins()
+    for line in _pins():
+        assert re.fullmatch(r"[A-Za-z0-9_.-]+==[A-Za-z0-9_.-]+", line), line
+
+
+def test_constraints_cover_and_match_the_declared_dependencies():
+    declared = tomllib.loads(Path("pyproject.toml").read_text())["project"]["dependencies"]
+    pinned = {ln.lower().replace("_", "-") for ln in _pins()}
+    for dependency in declared:
+        assert dependency.replace("[binary]", "").lower().replace("_", "-") in pinned, dependency
+
+
+def test_dockerfile_installs_with_the_constraints():
+    text = Path("Dockerfile").read_text()
+    assert "constraints.txt" in text.split("pip install")[0]
+    assert "-c constraints.txt" in text
+
+
+def test_every_third_party_import_is_declared():
+    declared = tomllib.loads(Path("pyproject.toml").read_text())["project"]["dependencies"]
+    names = {re.split(r"[\[=]", d)[0].lower() for d in declared} | {"yaml", "psycopg"}
+    assert {"anthropic", "httpx", "langgraph", "pydantic", "pytest", "sqlglot"} <= names
+    source = "".join(p.read_text(encoding="utf-8") for p in Path("src").rglob("*.py"))
+    assert "typing_extensions" not in source
 
 
 def test_one_shot_services_idle_and_report_health_from_a_fresh_marker():

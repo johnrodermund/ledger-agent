@@ -28,7 +28,21 @@ jobs:
       - uses: actions/checkout@v4
       - name: Create .env from the test values
         run: cp .env.example .env
+      # A scheduled run without the secret has nothing to do. A manual run still reaches
+      # the next step, which fails loudly.
+      - name: Decide whether to run
+        id: key
+        env:
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: |
+          if [ "$HAS_KEY" != "true" ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            echo "::notice::The ANTHROPIC_API_KEY secret is not set, so the scheduled run is skipped."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Run the evals
+        if: steps.key.outputs.run == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -36,7 +50,15 @@ jobs:
             echo "::error::The ANTHROPIC_API_KEY secret is empty. Add it under repository secrets before running live or record mode."
             exit 1
           fi
-          docker compose up --build --abort-on-container-exit --exit-code-from evals
+          # The agent service audits dev-1, which the evals record anyway, so record mode
+          # runs the evals alone. They load their own databases.
+          if [ "$LEDGER_LLM_MODE" = "record" ]; then
+            docker compose build evals
+            docker compose up -d --wait db
+            docker compose run --rm --no-deps evals
+          else
+            docker compose up --build --abort-on-container-exit --exit-code-from evals
+          fi
       - name: Show service logs on failure
         if: failure()
         run: docker compose logs --no-color
