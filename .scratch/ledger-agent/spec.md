@@ -128,7 +128,7 @@ Query limits are configurable. Their values above are defaults.
 - Each fix gets 3 attempts. `verify`'s failure reason goes back to `propose`.
 - Each finding ends as `verified` or `needs_human`. Unresolved findings still appear in the report.
 - Typed state holds schema notes, the findings queue, the current attempt count and token use.
-- A run stops at a token limit, default 200,000 tokens, and reports what it has so far.
+- A run stops at a token limit, default 250,000 tokens (raised from 200,000 after the first dev baseline), and reports what it has so far.
 - The graph has no approval pause, because nothing is applied. The report is the handoff to a person.
 
 ## Guardrails
