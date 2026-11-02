@@ -10,6 +10,7 @@ from ledger_agent.agent.nodes import Deps, confirm, explore, hunt
 from ledger_agent.agent.prompts import (
     EXPLORE_SYSTEM,
     HUNT_SYSTEM,
+    PROPOSE_SYSTEM,
     RUN_SQL_TOOL,
     SUBMIT_FINDINGS_TOOL,
     SUBMIT_SCHEMA_NOTES_TOOL,
@@ -238,6 +239,18 @@ def test_loop_fails_when_the_forced_turn_and_its_retry_are_ignored(db, tmp_path)
 def test_hunt_prompt_names_no_tables_or_recipes():
     assert not re.search(r"GLJRNL|APINVH|GLCOA|DR_AMT|GLJRNH|GLPERD|SYSDICT", HUNT_SYSTEM)
     assert "evidence_sql" in HUNT_SYSTEM and "row keys" in HUNT_SYSTEM
+
+
+def test_hunt_prompt_does_not_describe_the_decoys():
+    text = HUNT_SYSTEM.lower()
+    for phrase in ("reversal", "credit note", "recurring", "rounding", "look wrong"):
+        assert phrase not in text
+    assert "enum" in str(SUBMIT_FINDINGS_TOOL) and "ap_gl_mismatch" in str(SUBMIT_FINDINGS_TOOL)
+
+
+def test_propose_prompt_states_the_group_balance_rule():
+    assert "new journal must balance" not in PROPOSE_SYSTEM
+    assert "group" in PROPOSE_SYSTEM and "one-sided" in PROPOSE_SYSTEM
 
 
 def test_prompts_contain_no_timestamps():

@@ -1,3 +1,4 @@
+import json
 import uuid
 import psycopg
 from decimal import Decimal
@@ -198,6 +199,60 @@ def test_propose_prompt_is_deterministic_and_marks_data_untrusted(db, fault, tmp
     assert db not in prompts[0] and "untrusted" in prompts[0]
     assert evidence_sql(fault) in prompts[0]
     assert [t["name"] for t in provider.requests[-1].tools] == ["submit_correction"]
+
+
+def propose_prompt(db, fault, tmp_path, item=None):
+    _, provider = run(db, tmp_path, [
+        *discovery(item or finding_item(fault)), propose_reply(true_args(fault))])
+    return provider.requests[-1].messages[0]["content"]
+
+
+def test_propose_prompt_carries_the_target_journal(db, fault, tmp_path):
+    prompt = propose_prompt(db, fault, tmp_path)
+    jrnl = next(r.key for r in fault.rows if r.table == "GLJRNH")
+    with connect_admin(db) as c:
+        memo = c.execute('SELECT "MEMO" FROM "GLJRNH" WHERE "JRNL_NO" = %s', [jrnl]).fetchone()[0]
+        lines = c.execute('SELECT "ACCT_CD", "DR_AMT", "CR_AMT" FROM "GLJRNL" '
+                          'WHERE "JRNL_NO" = %s ORDER BY "LN_SEQ"', [jrnl]).fetchall()
+    assert f"Journal {jrnl}" in prompt and memo in prompt
+    for acct, dr, cr in lines:
+        assert json.dumps([str(acct), str(dr), str(cr)])[1:-1] in prompt
+
+
+def test_propose_prompt_lists_open_periods_and_active_accounts_in_order(db, fault, tmp_path):
+    prompt = propose_prompt(db, fault, tmp_path)
+    with connect_admin(db) as c:
+        opened = [r[0] for r in c.execute(
+            """SELECT "PRD_ID" FROM "GLPERD" WHERE "STAT_CD" = 'O' ORDER BY 1""").fetchall()]
+        accounts = [r[0] for r in c.execute(
+            """SELECT "ACCT_CD" FROM "GLCOA" WHERE "ACTV_FLG" = 'Y' ORDER BY 1""").fetchall()]
+        retired = [r[0] for r in c.execute(
+            """SELECT "ACCT_CD" FROM "GLCOA" WHERE "ACTV_FLG" <> 'Y'""").fetchall()]
+    section = prompt.split("Open periods", 1)[1]
+    rows = json.loads(section.split("\n", 1)[1].split("\n", 1)[0])["rows"]
+    assert [int(r[0]) for r in rows] == opened
+    active = prompt.split("Active accounts", 1)[1]
+    listed = [r[0] for r in json.loads(active.split("\n", 1)[1].split("\n", 1)[0])["rows"]]
+    assert listed == accounts and not set(listed) & set(retired)
+
+
+def test_propose_prompt_omits_the_journal_when_no_header_row_is_cited(db, fault, tmp_path):
+    item = finding_item(fault) | {"affected_rows": [{"table": "APINVH", "key": 1}]}
+    prompt = propose_prompt(db, fault, tmp_path, item)
+    assert "Journal " not in prompt.split("Evidence query result")[1].split("Open periods")[0]
+    assert "Open periods" in prompt and "Active accounts" in prompt
+
+
+def test_propose_prompt_skips_a_journal_that_does_not_exist(db, fault, tmp_path):
+    item = finding_item(fault) | {"affected_rows": [{"table": "GLJRNH", "key": 99999999}]}
+    prompt = propose_prompt(db, fault, tmp_path, item)
+    assert "Journal 99999999" not in prompt
+
+
+def test_propose_prompt_labels_the_summary_untrusted(db, fault, tmp_path):
+    prompt = propose_prompt(db, fault, tmp_path)
+    label = prompt.split("journal does not balance")[0].rsplit("\n", 1)[1]
+    assert "untrusted" in label
 
 
 def test_token_limit_stops_and_reports_partial(db, fault, tmp_path):

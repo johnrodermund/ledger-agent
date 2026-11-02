@@ -62,6 +62,11 @@ def test_readme_limitations_are_disclosed():
         assert phrase in text, phrase
 
 
+def test_readme_discloses_that_the_type_names_are_given_to_the_model():
+    limitations = _readme().split("## Limitations", 1)[1].split("\n## ", 1)[0].lower()
+    assert "five" in limitations and "type names" in limitations
+
+
 def test_readme_hundred_percent_applies_only_to_guardrails():
     for line in _readme().splitlines():
         if "100%" in line:

@@ -98,6 +98,7 @@ The answer key is hidden from the agent. It lives outside the database and is ne
 ## Limitations
 
 - The audit principles given to `hunt` overlap the five planted fault types. The agent is told to look for balance, tie-out, period and reference problems, and those are the faults that were planted. Recall here is not evidence it would find faults of a kind nobody planted.
+- The five type names are given to the model. `submit_findings` lists them as an enum alongside `other`, so `hunt` knows which kinds of fault are expected, though not where they are or how to detect them.
 - The verifier has coded resolution rules for five fault types only: unbalanced journal, duplicate invoice, AP-to-GL mismatch, closed-period posting, invalid account. A finding of any other type goes straight to `needs_human`.
 - Verified does not mean correct. The verifier checks that a fix is well formed, contained, and resolves the fault by its own rule. It can accept a balanced fix posted to an account that is active but wrong. That is why scoring is independent and `verified_but_wrong` is reported.
 - The data is synthetic, generated from a seed with planted faults and decoys. Real ledgers are messier, bigger and wrong in more ways.

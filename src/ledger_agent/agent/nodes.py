@@ -13,6 +13,7 @@ from ledger_agent.agent.prompts import (
     FINDING_TYPES,
     HUNT_START,
     HUNT_SYSTEM,
+    PROPOSE_JOURNAL,
     PROPOSE_PROMPT,
     PROPOSE_RETRY,
     PROPOSE_SYSTEM,
@@ -37,6 +38,18 @@ from ledger_agent.verifier.verify import verify as verify_correction
 __all__ = ["Deps", "explore", "hunt", "confirm", "pick", "propose", "verify"]
 
 EVIDENCE_ROWS = 20
+MAX_TARGET_JOURNALS = 5  # a grouped finding could cite many; a correction targets one
+JOURNAL_HEADER_SQL = (
+    'SELECT "JRNL_NO", "PRD_ID", "POST_DT", "POST_FLG", "REF_JRNL_NO", "SRC_CD", "SRC_REF", '
+    '"MEMO" FROM "GLJRNH" WHERE "JRNL_NO" = {key} ORDER BY "JRNL_NO"')
+JOURNAL_LINES_SQL = (
+    'SELECT "ACCT_CD", "DR_AMT", "CR_AMT", "LN_SEQ" FROM "GLJRNL" WHERE "JRNL_NO" = {key} '
+    'ORDER BY "LN_SEQ"')
+OPEN_PERIODS_SQL = (
+    'SELECT "PRD_ID", "STRT_DT", "END_DT" FROM "GLPERD" WHERE "STAT_CD" = \'O\' ORDER BY "PRD_ID"')
+ACTIVE_ACCOUNTS_SQL = (
+    'SELECT "ACCT_CD", "ACCT_NM", "ACCT_TYP" FROM "GLCOA" WHERE "ACTV_FLG" = \'Y\' '
+    'ORDER BY "ACCT_CD"')
 TOKEN_LIMIT_REASON = "token limit reached"
 
 
@@ -287,6 +300,22 @@ def pick(state: AgentState, deps: Deps) -> dict[str, Any]:
             "proposal": None}
 
 
+def _journals_text(dbname: str, finding: Finding) -> str:
+    """Header and lines of each journal the finding cites by its GLJRNH rows, in the
+    order cited. Empty if it cites none that exist. The propose stage has no SQL tool,
+    so code fetches this through the read-only tool."""
+    cited = [row.key for row in finding.affected_rows if row.table == "GLJRNH"]
+    parts = []
+    for key in cited[:MAX_TARGET_JOURNALS]:
+        header = run_query(dbname, JOURNAL_HEADER_SQL.format(key=key))
+        if header.rows:
+            lines = run_query(dbname, JOURNAL_LINES_SQL.format(key=key))
+            parts.append(PROPOSE_JOURNAL.format(
+                jrnl_no=key, header=format_query_result(header),
+                lines=format_query_result(lines)))
+    return "".join(parts)
+
+
 def _propose_prompt(state: AgentState, finding: Finding) -> str:
     evidence = state["evidence"].get(finding.finding_id)
     if evidence is None:
@@ -300,10 +329,15 @@ def _propose_prompt(state: AgentState, finding: Finding) -> str:
         retry = PROPOSE_RETRY.format(
             previous=state["attempt"], reason=state["last_failure"],
             correction=state["proposal"].model_dump_json())
+    dbname = state["dbname"]
     return PROPOSE_PROMPT.format(
         notes=state["schema_notes"] or "(no schema notes were produced)",
         finding_id=finding.finding_id, finding_type=finding.type, summary=finding.summary,
-        rows=rows, evidence_sql=finding.evidence_sql, evidence=shown, retry=retry)
+        rows=rows, evidence_sql=finding.evidence_sql, evidence=shown,
+        journals=_journals_text(dbname, finding),
+        periods=format_query_result(run_query(dbname, OPEN_PERIODS_SQL)),
+        accounts=format_query_result(run_query(dbname, ACTIVE_ACCOUNTS_SQL)),
+        retry=retry)
 
 
 def propose(state: AgentState, deps: Deps) -> dict[str, Any]:
