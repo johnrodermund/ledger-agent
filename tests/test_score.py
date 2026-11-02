@@ -509,12 +509,12 @@ def test_cost_is_exact_in_small_amounts_and_sums_exactly():
 def test_default_model_is_haiku_at_its_standard_rate():
     assert DEFAULT_MODEL == "claude-haiku-5-5"
     scored = score(audit_result(input_tokens=1_000_000, output_tokens=20_000,
-                                calls=[(50_000, 1_000)] * 20), answer_key())
+                                calls=[(50_000, 1_000, 0, 0)] * 20), answer_key())
     assert scored.cost_usd == Decimal("0.11")  # 1M in at $0.10 plus 20k out at $0.50
 
 
 def test_haiku_prices_each_long_prompt_at_the_long_rate():
-    calls = [(100_000, 1_000), (100_001, 1_000)]  # the first is not over the limit
+    calls = [(100_000, 1_000, 0, 0), (100_001, 1_000, 0, 0)]  # the first is not over
     scored = score(audit_result(input_tokens=200_001, output_tokens=2_000, calls=calls),
                    answer_key())
     standard = Decimal(100_000) * Decimal("0.10") + Decimal(1_000) * Decimal("0.50")
@@ -545,3 +545,22 @@ def test_aggregates_sum_counts_rather_than_average_ratios():
 def test_aggregate_of_nothing_is_undefined():
     total = aggregate([])
     assert total.recall is None and total.precision is None and total.tokens == 0
+
+
+def test_cache_writes_and_reads_are_priced_apart_from_plain_input():
+    calls = [(1_000, 100, 4_000, 0), (500, 100, 0, 4_000)]
+    scored = score(audit_result(input_tokens=9_500, output_tokens=200, calls=calls),
+                   answer_key(), model="claude-sonnet-5-5")
+    plain = Decimal(1_500) * Decimal("2.00") + Decimal(200) * Decimal("10.00")
+    write = Decimal(4_000) * Decimal("2.00") * Decimal("1.25")
+    read = Decimal(4_000) * Decimal("2.00") * Decimal("0.1")
+    assert scored.cost_usd == (plain + write + read) / 1_000_000
+
+
+def test_cached_tokens_count_toward_the_long_prompt_rate():
+    calls = [(1_000, 1_000, 0, 99_001)]  # 100,001 prompt tokens, most read from cache
+    scored = score(audit_result(input_tokens=100_001, output_tokens=1_000, calls=calls),
+                   answer_key())
+    expected = (Decimal(1_000) * Decimal("0.50") + Decimal(1_000) * Decimal("2.50")
+                + Decimal(99_001) * Decimal("0.50") * Decimal("0.1"))
+    assert scored.cost_usd == expected / 1_000_000

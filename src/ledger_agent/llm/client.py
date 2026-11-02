@@ -28,6 +28,8 @@ THINKING_BY_MODEL = {
     "claude-sonnet-5-5": {"type": "between_tools"},
 }
 
+CACHE = {"type": "ephemeral"}  # 5 minutes: a stage's turns are seconds apart
+
 Mode = Literal["replay", "record", "live"]
 MODES = ("replay", "record", "live")
 
@@ -52,9 +54,15 @@ class ModelRequest:
 class ModelResponse:
     text: str
     tool_calls: list[ToolCall] = field(default_factory=list)
-    input_tokens: int = 0
+    input_tokens: int = 0  # the uncached remainder of the prompt
     output_tokens: int = 0
     stop_reason: str | None = None
+    cache_write_tokens: int = 0
+    cache_read_tokens: int = 0
+
+    @property
+    def prompt_tokens(self) -> int:
+        return self.input_tokens + self.cache_write_tokens + self.cache_read_tokens
 
 
 class TransientProviderError(Exception):
@@ -128,10 +136,13 @@ class AnthropicProvider:
             msg = self._client.messages.create(
                 model=req.model,
                 max_tokens=self._max_tokens,
-                system=system,
+                # One breakpoint caches tools and system, which render first. The
+                # top-level marker caches the conversation so far, moving with each turn.
+                # Neither is part of ModelRequest, so recordings keep their keys.
+                system=[{"type": "text", "text": system, "cache_control": CACHE}],
                 messages=req.messages,
-                # The pinned SDK's thinking parameter predates between_tools.
-                extra_body={"thinking": THINKING_BY_MODEL[req.model]},
+                # The pinned SDK predates between_tools thinking and top-level caching.
+                extra_body={"thinking": THINKING_BY_MODEL[req.model], "cache_control": CACHE},
                 **kwargs,
             )
         except a.APIConnectionError as e:
@@ -153,6 +164,8 @@ class AnthropicProvider:
             input_tokens=msg.usage.input_tokens,
             output_tokens=msg.usage.output_tokens,
             stop_reason=msg.stop_reason,
+            cache_write_tokens=msg.usage.cache_creation_input_tokens or 0,
+            cache_read_tokens=msg.usage.cache_read_input_tokens or 0,
         )
 
 
@@ -179,8 +192,9 @@ class ModelClient:
         self._sleep = sleep
         self.input_tokens = 0
         self.output_tokens = 0
-        # (input, output) per request, since some prices depend on a request's length.
-        self.calls: list[tuple[int, int]] = []
+        # (input, output, cache_write, cache_read) per request: prices differ for each,
+        # and some depend on a request's length. Input is the uncached remainder.
+        self.calls: list[tuple[int, int, int, int]] = []
 
     @property
     def tokens_used(self) -> int:
@@ -195,9 +209,10 @@ class ModelClient:
             resp = self._call_with_retry(req)
             if self.mode == "record":
                 save_recording(self.recordings, self.namespace, req, resp)
-        self.input_tokens += resp.input_tokens
+        self.input_tokens += resp.prompt_tokens  # budgets count the whole prompt
         self.output_tokens += resp.output_tokens
-        self.calls.append((resp.input_tokens, resp.output_tokens))
+        self.calls.append((resp.input_tokens, resp.output_tokens,
+                           resp.cache_write_tokens, resp.cache_read_tokens))
         return resp
 
     def _call_with_retry(self, req: ModelRequest) -> ModelResponse:
@@ -219,6 +234,8 @@ def _response_from_dict(d: dict[str, Any]) -> ModelResponse:
         input_tokens=d["input_tokens"],
         output_tokens=d["output_tokens"],
         stop_reason=d["stop_reason"],
+        cache_write_tokens=d.get("cache_write_tokens", 0),  # absent before caching
+        cache_read_tokens=d.get("cache_read_tokens", 0),
     )
 
 

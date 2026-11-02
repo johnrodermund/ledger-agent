@@ -102,4 +102,5 @@ class AuditResult(BaseModel):
     input_tokens: int
     output_tokens: int
     queries: int
-    calls: list[tuple[int, int]] = []  # (input, output) tokens per model request
+    # (input, output, cache_write, cache_read) tokens per model request; input is uncached
+    calls: list[tuple[int, int, int, int]] = []

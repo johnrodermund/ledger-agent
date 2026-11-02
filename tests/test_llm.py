@@ -98,7 +98,7 @@ def test_tokens_accumulate_in_replay_too(tmp_path):
     assert client.input_tokens == 20
     assert client.output_tokens == 10
     assert client.tokens_used == 30
-    assert client.calls == [(10, 5), (10, 5)]
+    assert client.calls == [(10, 5, 0, 0), (10, 5, 0, 0)]
 
 
 def test_retries_transient_errors_then_raises(tmp_path):
@@ -253,3 +253,31 @@ def test_client_from_env_rejects_unknown_mode(monkeypatch):
     monkeypatch.setenv("LEDGER_LLM_MODE", "bogus")
     with pytest.raises(ValueError):
         client_from_env("demo")
+
+
+class CachingProvider:
+    def complete(self, req):
+        return ModelResponse(text="ok", input_tokens=10, output_tokens=5,
+                             cache_write_tokens=100, cache_read_tokens=1_000)
+
+
+def test_budgets_count_the_whole_prompt_and_calls_keep_the_cache_split(tmp_path):
+    client = ModelClient(CachingProvider(), "record", tmp_path, namespace="ns")
+    client.complete(REQ)
+    assert client.input_tokens == 1_110 and client.tokens_used == 1_115
+    assert client.calls == [(10, 5, 100, 1_000)]
+    replay = ModelClient(ExplodingProvider(), "replay", tmp_path, namespace="ns")
+    replay.complete(REQ)
+    assert replay.calls == [(10, 5, 100, 1_000)]
+
+
+def test_a_recording_made_before_caching_replays_with_no_cache_counts(tmp_path):
+    seeded(tmp_path)
+    path = next(tmp_path.rglob("*.json"))
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    for name in ("cache_write_tokens", "cache_read_tokens"):
+        doc["response"].pop(name, None)
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    client = ModelClient(ExplodingProvider(), "replay", tmp_path, namespace="ns")
+    client.complete(REQ)
+    assert client.calls == [(10, 5, 0, 0)]

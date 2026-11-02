@@ -69,7 +69,7 @@ def test_a_model_without_a_thinking_setting_is_refused_before_any_call():
 def test_a_forced_turn_steers_from_the_system_prompt():
     provider, sent = replying(message([]))
     provider.complete(ModelRequest(REQ.model, "sys", REQ.messages, [TOOL], "run_sql"))
-    assert "tool_choice" not in sent[0] and "`run_sql`" in sent[0]["system"]
+    assert "tool_choice" not in sent[0] and "`run_sql`" in sent[0]["system"][0]["text"]
 
 
 def test_parses_text_tool_calls_usage_and_stop_reason():
@@ -144,3 +144,22 @@ def test_retry_after_is_carried_on_the_error(headers, expected):
     with pytest.raises(TransientProviderError) as exc:
         provider.complete(REQ)
     assert exc.value.retry_after == expected
+
+
+def test_marks_the_system_prompt_and_the_conversation_for_caching():
+    provider, sent = replying(message([{"type": "text", "text": "ok"}]))
+    provider.complete(REQ)
+    assert sent[0]["system"] == [
+        {"type": "text", "text": "sys", "cache_control": {"type": "ephemeral"}}]
+    assert sent[0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_reads_cache_usage_and_treats_a_missing_count_as_zero():
+    body = message([{"type": "text", "text": "ok"}])
+    body["usage"] |= {"cache_creation_input_tokens": 300, "cache_read_input_tokens": 900}
+    provider, _ = replying(body)
+    resp = provider.complete(REQ)
+    assert (resp.input_tokens, resp.cache_write_tokens, resp.cache_read_tokens) == (11, 300, 900)
+    provider, _ = replying(message([{"type": "text", "text": "ok"}]))
+    resp = provider.complete(REQ)
+    assert (resp.cache_write_tokens, resp.cache_read_tokens) == (0, 0)

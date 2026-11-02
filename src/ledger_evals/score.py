@@ -30,16 +30,22 @@ class Price(NamedTuple):
     long_input: Decimal | None = None
     long_output: Decimal | None = None
     long_above: int | None = None
+    # Cache reads as a share of the input rate; writes are 1.25 times it (5-minute TTL).
+    cache_read: Decimal = Decimal("0.1")
 
 
-# US dollars per million tokens: first-party API list prices, no caching or batching.
+CACHE_WRITE = Decimal("1.25")
+
+# US dollars per million tokens: first-party API list prices, no batching. Cache rates
+# are multiples of the input rate, per the claude-api skill's prompt caching notes.
 # Taken from the claude-api skill's model table, cached 2026-10-06.
 PRICES_PER_MTOK = {
     "claude-haiku-5-5": Price(input=Decimal("0.10"), output=Decimal("0.50"),
                               long_input=Decimal("0.50"), long_output=Decimal("2.50"),
                               long_above=100_000),
     "claude-sonnet-5-5": Price(input=Decimal("2.00"), output=Decimal("10.00")),
-    "claude-opus-5-5": Price(input=Decimal("4.00"), output=Decimal("20.00")),
+    "claude-opus-5-5": Price(input=Decimal("4.00"), output=Decimal("20.00"),
+                             cache_read=Decimal("0.05")),
 }
 
 
@@ -212,18 +218,21 @@ def _incomplete_reasons(result: AuditResult) -> list[str]:
 
 
 def _cost(result: AuditResult, model: str) -> Decimal:
-    """Each request is priced on its own prompt length. A result with no per-request
-    counts is priced on its totals at the standard rate."""
+    """Each request is priced on its own prompt length, cached tokens included, with
+    cache writes and reads at their own rates. A result with no per-request counts is
+    priced on its totals at the standard rate."""
     price = PRICES_PER_MTOK[model]  # an unpriced model fails, rather than costing nothing
     if not result.calls:
         return (result.input_tokens * price.input
                 + result.output_tokens * price.output) / 1_000_000
     total = Decimal(0)
-    for input_tokens, output_tokens in result.calls:
-        long = price.long_above is not None and input_tokens > price.long_above
+    for input_tokens, output_tokens, cache_write, cache_read in result.calls:
+        prompt = input_tokens + cache_write + cache_read
+        long = price.long_above is not None and prompt > price.long_above
         rate_in = price.long_input if long else price.input
         rate_out = price.long_output if long else price.output
-        total += input_tokens * rate_in + output_tokens * rate_out
+        total += (input_tokens * rate_in + output_tokens * rate_out
+                  + cache_write * rate_in * CACHE_WRITE + cache_read * rate_in * price.cache_read)
     return total / 1_000_000
 
 
