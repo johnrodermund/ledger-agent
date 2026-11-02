@@ -306,7 +306,7 @@ def test_token_limit_stops_and_reports_partial(db, fault, tmp_path):
 def test_propose_stops_at_its_own_budget_and_keeps_earlier_findings(db, fault, tmp_path):
     second = finding_item(fault) | {
         "summary": "second", "affected_rows": [{"table": "APINVH", "key": 1}]}
-    good = reply(call("submit_correction", "p1", **true_args(fault)), tokens=300)
+    good = reply(call("submit_correction", "p1", **true_args(fault)), tokens=400)
     result, provider = run(db, tmp_path, [
         *discovery(finding_item(fault), second), good], Limits(tokens=1000))
     assert [o.status for o in result.state["outcomes"]] == ["verified", "needs_human"]

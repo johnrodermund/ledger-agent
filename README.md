@@ -84,7 +84,7 @@ The fix convention is that posted entries are never edited. A fix is a new corre
 
 The answer key is hidden from the agent. It lives outside the database and is never mounted in the `agent` container.
 
-A run has a token limit, default 250,000 tokens, shared out as stage budgets: 30% for `explore`, 40% for `hunt` and 30% for `propose`, each measured from the start of its stage. Tokens count every request in full, so a long conversation spends its budget quickly. Near its budget, `explore` or `hunt` loses the SQL tool and is told to submit, so what it found is kept. That last turn can run a little past the budget. In `propose`, findings left when the budget runs out go to `needs_human`. Hitting a budget is recorded in the report and marks the run incomplete.
+A run has a token limit, default 300,000 tokens, shared out as stage budgets: 25% for `explore`, 35% for `hunt` and 40% for `propose`, each measured from the start of its stage. Tokens count every request in full, so a long conversation spends its budget quickly. Near its budget, `explore` or `hunt` loses the SQL tool and is told to submit, so what it found is kept. That last turn can run a little past the budget. In `propose`, findings left when the budget runs out go to `needs_human`. Hitting a budget is recorded in the report and marks the run incomplete.
 
 ### Evals
 
@@ -98,7 +98,7 @@ A run has a token limit, default 250,000 tokens, shared out as stage budgets: 30
 `.github/workflows/live-evals.yml` has no schedule and only runs when started by hand, with a `mode` input of `live` (the default) or `record`. `record` uploads `recordings/` as a workflow artifact for a person to review and commit. The workflow never commits anything. Its cost is bounded two ways:
 
 - `timeout-minutes: 45` stops the job.
-- Each audit stays near the 250,000 token limit, as its stage budgets force a submit before they run out, and each forced turn can run a little past. In `live` mode the agent and the ten eval scenarios each use a fresh client, so one run is capped at roughly 2.75 million tokens in total. `record` mode skips the `agent` service, as the evals record the same scenario, so it is capped at roughly 2.5 million.
+- Each audit stays near the 300,000 token limit, as its stage budgets force a submit before they run out, and each forced turn can run a little past. In `live` mode the agent and the ten eval scenarios each use a fresh client, so one run is capped at roughly 3.3 million tokens in total. `record` mode skips the `agent` service, as the evals record the same scenario, so it is capped at roughly 3 million.
 
 A run without the `ANTHROPIC_API_KEY` secret fails with a clear error.
 

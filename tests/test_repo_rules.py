@@ -82,7 +82,7 @@ def test_readme_discloses_the_planted_fault_count():
 
 def test_readme_token_limit_describes_stage_budgets():
     text = " ".join(_readme().lower().split())
-    assert "30%" in text and "40%" in text
+    assert "25%" in text and "35%" in text and "40%" in text
 
 
 def test_readme_hundred_percent_applies_only_to_guardrails():

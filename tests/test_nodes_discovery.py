@@ -337,10 +337,10 @@ def test_explore_stores_notes(db, tmp_path):
 
 def test_limits_split_the_token_limit_between_stages():
     limits = Limits()
-    assert limits.tokens == 250_000
+    assert limits.tokens == 300_000
     assert (limits.explore_tokens, limits.hunt_tokens, limits.propose_tokens) == (
-        75_000, 100_000, 75_000)
-    assert Limits(tokens=1000).hunt_tokens == 400
+        75_000, 105_000, 120_000)
+    assert Limits(tokens=1000).hunt_tokens == 350
 
 
 def test_explore_keeps_notes_when_its_token_budget_runs_out(db, tmp_path):
