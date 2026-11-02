@@ -67,6 +67,7 @@ class AgentState(TypedDict):
     limits_hit: list[str]
     evidence: dict[str, Evidence]
     proposal: Correction | None
+    rejected: list[Correction]  # every correction the verifier refused, in order
     queries: int
 
 
@@ -83,4 +84,6 @@ class AuditResult(BaseModel):
     state: AgentState
     trace: list[TraceEvent]
     tokens: int
+    input_tokens: int
+    output_tokens: int
     queries: int

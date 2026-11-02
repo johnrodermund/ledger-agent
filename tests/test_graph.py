@@ -11,8 +11,8 @@ from ledger_agent import cli
 from ledger_agent.db import DatabaseUnavailable, connect_admin
 from ledger_agent.erp.faults import build_scenario
 from ledger_agent.erp.load import load
-from ledger_agent.llm.client import ModelClient
-from ledger_agent.models import FaultType, ScenarioSpec
+from ledger_agent.llm.client import ModelClient, ModelRequest, ModelResponse
+from ledger_agent.models import Correction, FaultType, ScenarioSpec
 from ledger_agent.report import write_report
 from ledger_evals.bad_fixes import FIRST_OPEN, _true_fix
 
@@ -111,6 +111,27 @@ def test_three_failures_end_needs_human(db, fault, tmp_path):
     assert outcome.status == "needs_human" and outcome.attempts == 3
     assert "balance" in outcome.reason
     assert len(provider.requests) == 5
+
+
+def test_rejected_corrections_are_kept_in_order(db, fault, tmp_path):
+    bad = bad_args(fault)
+    result, _ = run(db, tmp_path, [
+        *discovery(finding_item(fault)), propose_reply(bad), propose_reply(true_args(fault))])
+    assert [c.model_dump(mode="json") for c in result.state["rejected"]] == [
+        Correction.model_validate(bad).model_dump(mode="json")]
+    gave_up, _ = run(db, tmp_path, [
+        *discovery(finding_item(fault)), *[propose_reply(bad) for _ in range(3)]])
+    assert len(gave_up.state["rejected"]) == 3
+
+
+def test_audit_splits_tokens_for_this_run_only(db, tmp_path):
+    earlier = ModelResponse(text="", input_tokens=3, output_tokens=2)
+    notes, findings = discovery(tokens=5)
+    findings.output_tokens = 4
+    deps = Deps(ModelClient(FakeProvider([earlier, notes, findings]), "live", tmp_path))
+    deps.client.complete(ModelRequest("m", "s", [], []))
+    result = audit(db, deps)
+    assert (result.tokens, result.input_tokens, result.output_tokens) == (14, 10, 4)
 
 
 def test_malformed_proposal_retries_once_then_needs_human(db, fault, tmp_path):

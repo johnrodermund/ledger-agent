@@ -338,8 +338,9 @@ def verify(state: AgentState, deps: Deps) -> dict[str, Any]:
             attempts=attempt,
             rendered_sql=render_text(correction, _next_jrnl_no(state["dbname"]))))
     failure = f"{result.check}: {result.reason}"
+    rejected = [*state["rejected"], correction]
     if attempt >= deps.limits.fix_attempts:
         return _end_finding(state, Outcome(
             finding_id=finding.finding_id, status="needs_human", attempts=attempt,
-            reason=f"verifier rejected every correction; last: {failure}"))
-    return {"attempt": attempt, "last_failure": failure}
+            reason=f"verifier rejected every correction; last: {failure}")) | {"rejected": rejected}
+    return {"attempt": attempt, "last_failure": failure, "rejected": rejected}

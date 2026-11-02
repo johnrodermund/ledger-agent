@@ -17,10 +17,23 @@ from ledger_agent.models import DecoyType, FaultType, ScenarioSpec
 from ledger_agent.report import write_report
 
 
+def _named_scenario(scenario_id: str) -> ScenarioSpec | None:
+    from ledger_evals.scenarios import load_scenarios  # lazy: only this path needs evals
+
+    return next((s for s in load_scenarios() if s.id == scenario_id), None)
+
+
 def _seed(args: argparse.Namespace) -> int:
-    """Load one of each fault and decoy into --db. The key goes to --key-out only."""
-    spec = ScenarioSpec(id=f"seed-{args.seed}", split="dev", seed=args.seed,
-                        faults={t: 1 for t in FaultType}, decoys=list(DecoyType))
+    """Load an eval scenario, or one of each fault and decoy for a bare seed, into --db.
+    The key goes to --key-out only."""
+    if args.scenario is None:
+        spec = ScenarioSpec(id=f"seed-{args.seed}", split="dev", seed=args.seed,
+                            faults={t: 1 for t in FaultType}, decoys=list(DecoyType))
+    else:
+        spec = _named_scenario(args.scenario)
+        if spec is None:
+            print(f"error: unknown scenario {args.scenario}", file=sys.stderr)
+            return 1
     dataset, key = build_scenario(spec)
     load(args.db, dataset)
     args.key_out.parent.mkdir(parents=True, exist_ok=True)
@@ -66,7 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
 
     seed = commands.add_parser("seed", help="load a planted scenario into a database")
-    seed.add_argument("--seed", type=int, required=True, help="scenario seed")
+    source = seed.add_mutually_exclusive_group(required=True)
+    source.add_argument("--seed", type=int, help="seed for one of each fault and decoy")
+    source.add_argument("--scenario", help="scenario id from evals/scenarios.yaml")
     seed.add_argument("--db", required=True, help="database to drop and recreate")
     seed.add_argument("--key-out", type=Path, required=True, help="answer key output path")
     seed.set_defaults(run=_seed)

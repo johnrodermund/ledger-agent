@@ -73,19 +73,25 @@ def initial_state(dbname: str) -> AgentState:
     return {
         "dbname": dbname, "schema_notes": "", "findings": [], "dropped": [], "queue": [],
         "current": None, "attempt": 0, "last_failure": None, "outcomes": [],
-        "limits_hit": [], "evidence": {}, "proposal": None, "queries": 0,
+        "limits_hit": [], "evidence": {}, "proposal": None, "rejected": [],
+        "queries": 0,
     }
 
 
 def audit(dbname: str, deps: Deps) -> AuditResult:
     """Run the whole audit against dbname. Token totals count this run only."""
     deps.trace.clear()
-    tokens_before = deps.client.tokens_used
+    input_before = deps.client.input_tokens
+    output_before = deps.client.output_tokens
     final = build_graph(deps).invoke(
         initial_state(dbname), config={"recursion_limit": RECURSION_LIMIT})
+    input_tokens = deps.client.input_tokens - input_before
+    output_tokens = deps.client.output_tokens - output_before
     return AuditResult(
         state=final,
         trace=list(deps.trace),
-        tokens=deps.client.tokens_used - tokens_before,
+        tokens=input_tokens + output_tokens,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
         queries=final["queries"],
     )
