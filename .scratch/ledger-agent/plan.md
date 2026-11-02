@@ -748,34 +748,46 @@ git commit -m "feat: add one-command run, CI and README"
 
 - [ ] **Step 1: Measure one run**
 
-Run: `LEDGER_LLM_MODE=live docker compose run --rm evals python -m ledger_evals.run --split dev --out out/probe` with only `dev-1` selected.
-Expected: results include tokens and cost. Report the cost to the owner before running more.
+Seed first: `docker compose up -d --wait db`, then `docker compose run --rm --no-deps seed python -m ledger_agent.cli seed --scenario dev-1 --db ledger_dev_1 --key-out /keys/dev-1.json`.
+Run: `LEDGER_LLM_MODE=live docker compose run --rm --no-deps evals python -m ledger_evals.run --scenario dev-1 --out /out/probe`
+Expected: results include tokens and cost. Report the cost and the measured token need against the stage budgets to the owner before running more.
 
-- [ ] **Step 2: Tune prompts on dev only**
+- [ ] **Step 2: Prove a recording replays**
 
-Run the dev split, read misses in `trace.json`, and change `prompts.py`. Never run holdout during this step, and never add fault recipes or table names to prompts.
+Run: `LEDGER_LLM_MODE=record docker compose run --rm --no-deps evals python -m ledger_evals.run --scenario dev-1 --out /out/record-check`
+Then `docker compose down -v`, start a fresh stack with the seed commands from Step 1, and run: `LEDGER_LLM_MODE=replay docker compose run --rm --no-deps evals python -m ledger_evals.run --scenario dev-1 --out /out/replay-check`
+Expected: identical scores in both `results.json` files. Fix any difference before recording anything else.
 
-- [ ] **Step 3: Record every scenario once**
+- [ ] **Step 3: Tune prompts on dev only**
 
-Run: `LEDGER_LLM_MODE=record docker compose run --rm evals python -m ledger_evals.run --split all --out out/baseline`
-Expected: all 10 scenarios complete, with `recordings/` populated.
+Seed first, as in Step 1. Run: `LEDGER_LLM_MODE=live docker compose run --rm --no-deps evals python -m ledger_evals.run --split dev --out /out/tuning`
+Read misses in each `/out/tuning/<scenario>/trace.json`, and change `prompts.py`. Never run holdout during this step, and never add fault recipes or table names to prompts.
 
-- [ ] **Step 4: Set thresholds and publish results**
+- [ ] **Step 4: Record every scenario once**
 
-Set `thresholds.json` from the holdout results, rounding each metric down to the nearest 5 percentage points. Copy the holdout table and misses into the README, unedited.
+Seed first, as in Step 1. Clear any recordings made before the prompts settled. Record dev and injection first:
+`LEDGER_LLM_MODE=record docker compose run --rm --no-deps evals python -m ledger_evals.run --split dev --out /out/baseline-dev`
+`LEDGER_LLM_MODE=record docker compose run --rm --no-deps evals python -m ledger_evals.run --split injection --out /out/baseline-injection`
+Then freeze the prompts. Holdout runs once, after that:
+`LEDGER_LLM_MODE=record docker compose run --rm --no-deps evals python -m ledger_evals.run --split holdout --out /out/baseline`
+Expected: all 10 scenarios complete, with `recordings/` populated. Check by hand that `results.json` shows 0 incomplete scenarios in each run.
 
-- [ ] **Step 5: Verify the no-key run**
+- [ ] **Step 5: Set thresholds and publish results**
+
+Set `thresholds.json` from the holdout results, to the nearest 5 percentage points. Round rates that should be high down, and rates that should be low (`decoy_false_alarm_rate`, `needs_human_rate`) up. Copy the holdout table and misses into the README, unedited.
+
+- [ ] **Step 6: Verify the no-key run**
 
 Run with no `ANTHROPIC_API_KEY` set: `docker compose up --build --abort-on-container-exit --exit-code-from evals`
 Expected: exit 0, with results matching the baseline.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add -A
+git add README.md evals/thresholds.json recordings src/ledger_agent/agent/prompts.py
 git commit -m "feat: add recordings, baseline thresholds and results"
 ```
 
-- [ ] **Step 7: Ask the owner to confirm before publishing**
+- [ ] **Step 8: Ask the owner to confirm before publishing**
 
 Before asking, read the README and search all tracked files and commit messages to confirm the Global Constraint on repo content holds. On a yes, create public `ledger-agent` under `johnrodermund`, push, and add `ANTHROPIC_API_KEY` as a repo secret only by asking the owner to enter it. Confirm CI passes on the first push.
