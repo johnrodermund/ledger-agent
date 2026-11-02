@@ -123,6 +123,8 @@ def test_live_evals_workflow():
     assert mode["type"] == "choice" and mode["options"] == ["live", "record"]
     assert mode["default"] == "live"
     assert wf["permissions"] == {"contents": "read"}
+    # An empty mode falls back to replay in compose, so the job must default to live.
+    assert wf["jobs"]["evals"]["env"]["LEDGER_LLM_MODE"] == "${{ inputs.mode || 'live' }}"
     text = (WORKFLOWS / "live-evals.yml").read_text()
     assert "secrets.ANTHROPIC_API_KEY" in text
     assert "timeout-minutes" in text

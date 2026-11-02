@@ -22,7 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      LEDGER_LLM_MODE: ${{ inputs.mode }}
+      # Never empty: compose treats an empty mode as replay, which would make no model call.
+      LEDGER_LLM_MODE: ${{ inputs.mode || 'live' }}
     steps:
       - uses: actions/checkout@v4
       - name: Create .env from the test values

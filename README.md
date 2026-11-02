@@ -109,6 +109,7 @@ A run without the `ANTHROPIC_API_KEY` secret fails with a clear error.
 - The data is synthetic, generated from a seed with planted faults and decoys. Real ledgers are messier, bigger and wrong in more ways.
 - Nothing is applied. Fixes are suggestions in a report, never applied to any database, and a person has to review each one.
 - Replays do not prove behaviour against the live model, as described above.
+- Nothing runs the live evals automatically. If the model changes or a prompt edit hurts quality, replays stay green until someone starts the live workflow by hand, so published results can be stale.
 - The 100% figure belongs to the guardrail suite alone. It says the verifier refuses the bad fixes in that library, not that it refuses every bad fix.
 
 ## Possible extensions
